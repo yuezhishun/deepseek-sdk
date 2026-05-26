@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/sample/">
+    <Project Path="sample/DeepSeek.Agui.Agent/DeepSeek.Agui.Agent.csproj" />
+    <Project Path="sample/DeepSeek.Agui.Console/DeepSeek.Agui.Console.csproj" />
+    <Project Path="sample/DeepSeek.Agui.CustomClient/DeepSeek.Agui.CustomClient.csproj" />
+    <Project Path="sample/DeepSeek.Sample/DeepSeek.Sample.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/DeepSeek/DeepSeek.csproj" />
+    <Project Path="src/Microsoft.Agents.AI.DeepSeek/Microsoft.Agents.AI.DeepSeek.csproj" />
+  </Folder>
+  <Folder Name="/test/">
+    <Project Path="test/DeepSeek.IntegrationTests/DeepSeek.IntegrationTests.csproj" />
+    <Project Path="test/DeepSeek.Tests/DeepSeek.Tests.csproj" />
+    <Project Path="test/Microsoft.Agents.AI.DeepSeek.UnitTests/Microsoft.Agents.AI.DeepSeek.UnitTests.csproj" />
+  </Folder>
+</Solution>
