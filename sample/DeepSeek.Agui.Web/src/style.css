@@ -1,0 +1,127 @@
+:root {
+  color-scheme: light;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  background: linear-gradient(180deg, #f4f0e6 0%, #f8faf9 50%, #eef5f7 100%);
+  color: #182126;
+  --panel: rgba(255, 255, 255, 0.84);
+  --line: rgba(24, 33, 38, 0.12);
+  --accent: #b95c21;
+  --accent-soft: rgba(185, 92, 33, 0.12);
+}
+
+* { box-sizing: border-box; }
+html, body, #app {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+body {
+  overflow: hidden;
+}
+a { color: inherit; text-decoration: none; }
+
+.shell {
+  height: 100dvh;
+  overflow: hidden;
+  padding: 20px;
+}
+.panel, .tool-card, .trace-item {
+  backdrop-filter: blur(14px);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  box-shadow: 0 20px 60px rgba(24, 33, 38, 0.08);
+}
+.panel h2, .panel h3 { margin: 0; font-family: "Georgia", serif; }
+.eyebrow { text-transform: uppercase; letter-spacing: 0.16em; font-size: 12px; color: #6f787c; }
+.layout {
+  display: grid;
+  height: 100%;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1.55fr) minmax(320px, 0.95fr);
+  gap: 20px;
+}
+.app-layout {
+  align-items: stretch;
+}
+.panel {
+  min-height: 0;
+  padding: 18px;
+}
+.chat-panel,
+.trace-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.panel-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 12px; }
+.panel-subtitle { margin: 8px 0 0; color: #556068; font-size: 14px; line-height: 1.45; }
+.button, .pill, .chip {
+  border-radius: 999px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  background: white;
+}
+.button { cursor: pointer; }
+.chat-surface,
+.trace-list {
+  min-height: 0;
+  flex: 1;
+}
+.chat-surface {
+  overflow: hidden;
+}
+.trace-list {
+  overflow: auto;
+  padding-right: 4px;
+}
+.copilot-chat-fill,
+.copilot-chat-fill > [data-copilotkit],
+.copilot-chat-fill [data-testid="copilot-chat-view"] {
+  height: 100%;
+  min-height: 0;
+}
+.copilot-chat-fill [data-testid="copilot-chat-view"] {
+  display: flex;
+  flex-direction: column;
+}
+.copilot-chat-fill [data-testid="copilot-chat-view-scroll"] {
+  min-height: 0;
+  overflow: auto;
+}
+.trace-item { margin-top: 10px; padding: 12px 14px; }
+.trace-item summary { cursor: pointer; display: flex; gap: 10px; align-items: center; }
+.trace-type { font-family: "IBM Plex Mono", monospace; color: var(--accent); }
+.trace-item pre {
+  margin: 12px 0 0;
+  padding: 12px;
+  border-radius: 14px;
+  background: #14191d;
+  color: #e7eef1;
+  overflow: auto;
+}
+.card-stack, .stack { display: grid; gap: 16px; }
+.event-empty-state {
+  padding: 16px;
+  border: 1px dashed var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.58);
+  color: #556068;
+}
+.tool-card { padding: 16px; }
+.tool-title { font-weight: 700; }
+.tool-meta { color: #556068; margin-top: 6px; }
+.chip-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.plain-list { padding-left: 18px; margin: 10px 0 0; }
+.empty { color: #6f787c; }
+
+@media (max-width: 960px) {
+  .shell {
+    padding: 14px;
+  }
+  .layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) minmax(240px, 0.78fr);
+  }
+}
