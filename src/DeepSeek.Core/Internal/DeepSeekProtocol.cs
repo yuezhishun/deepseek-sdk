@@ -183,9 +183,9 @@ internal static class DeepSeekProtocol
         DeepSeekErrorPayload? payload = null;
         try
         {
-            if (!string.IsNullOrWhiteSpace(body))
+            if (body is { } errorBody && !string.IsNullOrWhiteSpace(errorBody))
             {
-                payload = JsonSerializer.Deserialize<DeepSeekErrorPayload>(body, DeepSeekJson.SerializerOptions);
+                payload = JsonSerializer.Deserialize<DeepSeekErrorPayload>(errorBody, DeepSeekJson.SerializerOptions);
             }
         }
         catch
