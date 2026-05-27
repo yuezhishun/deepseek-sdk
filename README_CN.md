@@ -3,7 +3,7 @@
 `deepseek-sdk` 是一个适用于 DeepSeek 的 .NET SDK，包含两个主要库：
 
 - `src/DeepSeek.Core`：基于 `System.ClientModel` 与 HTTP pipeline 构建，可获得一致的请求处理模型、对日志、重试、诊断等横切能力更好的控制，也更适合构建可扩展的强类型 SDK 客户端
-- `src/Microsoft.Agents.AI.DeepSeek`：面向 Microsoft Agent Framework 的扩展与适配支持
+- `src/DeepSeek.Agents.AI`：面向 Microsoft Agent Framework 的扩展与适配支持
 - 包含 DeepSeek 的两个 Beta 接口支持：对话前缀续写（chat prefix continuation）和 FIM 补全（FIM completion）
 - 按照 DeepSeek 官方思考模式文档实现了 thinking mode，包括推理开关、推理强度控制、`reasoning_content` 处理，以及多轮对话和工具调用下的续推理语义
 
@@ -11,7 +11,7 @@
 
 ```bash
 dotnet add package DeepSeek.Core --version 1.0.0
-dotnet add package Microsoft.Agents.AI.DeepSeek --version 1.0.0
+dotnet add package DeepSeek.Agents.AI --version 1.0.0
 ```
 
 核心 NuGet 包名为 `DeepSeek.Core`，公共命名空间仍保持为 `DeepSeek` 与 `DeepSeek.*`。
@@ -87,9 +87,9 @@ Console.WriteLine(message?.ReasoningContent);
 Console.WriteLine(message?.Content);
 ```
 
-### `src/Microsoft.Agents.AI.DeepSeek`
+### `src/DeepSeek.Agents.AI`
 
-`Microsoft.Agents.AI.DeepSeek` 包将该强类型 SDK 适配到 `Microsoft.Extensions.AI` 和 `Microsoft.Agents.AI` 的抽象层之上。
+`DeepSeek.Agents.AI` 包将该强类型 SDK 适配到 `Microsoft.Extensions.AI` 和 `Microsoft.Agents.AI` 的抽象层之上。
 
 它包含：
 
@@ -103,7 +103,7 @@ Console.WriteLine(message?.Content);
 ```csharp
 using DeepSeek;
 using Microsoft.Extensions.AI;
-using Microsoft.Agents.AI.DeepSeek;
+using DeepSeek.Agents.AI;
 
 var client = new DeepSeekClient("your-api-key")
     .GetChatClient("deepseek-v4-flash")
@@ -126,7 +126,7 @@ var response = await client.GetResponseAsync(
 ```csharp
 using DeepSeek;
 using Microsoft.Extensions.AI;
-using Microsoft.Agents.AI.DeepSeek;
+using DeepSeek.Agents.AI;
 
 var client = new DeepSeekClient("your-api-key")
     .GetChatClient("deepseek-v4-flash")
@@ -168,7 +168,7 @@ Console.WriteLine(message.Text);
 
 ```csharp
 using DeepSeek;
-using Microsoft.Agents.AI.DeepSeek;
+using DeepSeek.Agents.AI;
 using Microsoft.Agents.AI.Hosting.AGUI.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -192,9 +192,9 @@ app.Run();
 ## 仓库结构
 
 - `src/DeepSeek.Core`：强类型 SDK
-- `src/Microsoft.Agents.AI.DeepSeek`：AI 抽象层适配器
+- `src/DeepSeek.Agents.AI`：AI 抽象层适配器
 - `test/DeepSeek.Tests`：强类型 SDK 的单元测试
-- `test/Microsoft.Agents.AI.DeepSeek.UnitTests`：适配器的单元测试
+- `test/DeepSeek.Agents.AI.UnitTests`：适配器的单元测试
 - `test/DeepSeek.IntegrationTests`：在线集成测试
 - `sample/`：仅示例项目
 
@@ -298,7 +298,7 @@ dotnet test DeepSeek.slnx
 
 ```bash
 dotnet test test/DeepSeek.Tests/DeepSeek.Tests.csproj
-dotnet test test/Microsoft.Agents.AI.DeepSeek.UnitTests/Microsoft.Agents.AI.DeepSeek.UnitTests.csproj
+dotnet test test/DeepSeek.Agents.AI.UnitTests/DeepSeek.Agents.AI.UnitTests.csproj
 ```
 
 ## 请求与响应日志
@@ -347,5 +347,5 @@ var client = new DeepSeekClient("your-api-key", clientOptions);
 
 ## 说明
 
-- 当前维护测试的范围包括 `src/DeepSeek.Core` 和 `src/Microsoft.Agents.AI.DeepSeek`
+- 当前维护测试的范围包括 `src/DeepSeek.Core` 和 `src/DeepSeek.Agents.AI`
 - `sample/` 下的项目仅用于示例演示，不包含专门的测试项目

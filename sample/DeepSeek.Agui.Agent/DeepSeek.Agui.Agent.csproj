@@ -26,13 +26,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\DeepSeek.Core\DeepSeek.Core.csproj" />
-    <ProjectReference Include="..\..\src\Microsoft.Agents.AI.DeepSeek\Microsoft.Agents.AI.DeepSeek.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Update="Data\**\*.*">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    <ProjectReference Include="..\..\src\DeepSeek.Agents.AI\DeepSeek.Agents.AI.csproj" />
   </ItemGroup>
 
 </Project>

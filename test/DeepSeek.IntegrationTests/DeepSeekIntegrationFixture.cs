@@ -4,7 +4,7 @@ using DeepSeek.Chat;
 using DeepSeek.Completions;
 using DeepSeek.Models;
 using Microsoft.Extensions.AI;
-using Microsoft.Agents.AI.DeepSeek;
+using DeepSeek.Agents.AI;
 using TestSupport;
 
 namespace DeepSeek.IntegrationTests;

@@ -3,7 +3,7 @@ using System.Text.Json.Nodes;
 using DeepSeek.Anthropic;
 using Microsoft.Extensions.AI;
 
-namespace Microsoft.Agents.AI.DeepSeek;
+namespace DeepSeek.Agents.AI;
 
 internal static class DeepSeekAnthropicRequestMapper
 {

@@ -3,7 +3,7 @@
 `deepseek-sdk` is a .NET SDK for DeepSeek with two primary libraries:
 
 - `src/DeepSeek.Core`: built on `System.ClientModel` and the HTTP pipeline model, providing a consistent request handling model, better control over cross-cutting concerns such as logging, retries, and diagnostics, and a stronger foundation for extensible typed SDK clients
-- `src/Microsoft.Agents.AI.DeepSeek`: extension and adapter support for Microsoft Agent Framework
+- `src/DeepSeek.Agents.AI`: extension and adapter support for Microsoft Agent Framework
 - support for DeepSeek's two Beta APIs: chat prefix continuation and FIM completion
 - implements thinking mode following DeepSeek's official documentation, including reasoning enablement, reasoning effort control, `reasoning_content` handling, and continued reasoning semantics across multi-turn conversations and tool calls
 
@@ -11,7 +11,7 @@
 
 ```bash
 dotnet add package DeepSeek.Core --version 1.0.0
-dotnet add package Microsoft.Agents.AI.DeepSeek --version 1.0.0
+dotnet add package DeepSeek.Agents.AI --version 1.0.0
 ```
 
 The core NuGet package is named `DeepSeek.Core`, while the public namespaces remain `DeepSeek` and `DeepSeek.*`.
@@ -87,9 +87,9 @@ Console.WriteLine(message?.ReasoningContent);
 Console.WriteLine(message?.Content);
 ```
 
-### `src/Microsoft.Agents.AI.DeepSeek`
+### `src/DeepSeek.Agents.AI`
 
-The `Microsoft.Agents.AI.DeepSeek` package adapts the typed SDK to the abstractions from `Microsoft.Extensions.AI` and `Microsoft.Agents.AI`.
+The `DeepSeek.Agents.AI` package adapts the typed SDK to the abstractions from `Microsoft.Extensions.AI` and `Microsoft.Agents.AI`.
 
 It includes:
 
@@ -103,7 +103,7 @@ Typical usage:
 ```csharp
 using DeepSeek;
 using Microsoft.Extensions.AI;
-using Microsoft.Agents.AI.DeepSeek;
+using DeepSeek.Agents.AI;
 
 var client = new DeepSeekClient("your-api-key")
     .GetChatClient("deepseek-v4-flash")
@@ -126,7 +126,7 @@ Example:
 ```csharp
 using DeepSeek;
 using Microsoft.Extensions.AI;
-using Microsoft.Agents.AI.DeepSeek;
+using DeepSeek.Agents.AI;
 
 var client = new DeepSeekClient("your-api-key")
     .GetChatClient("deepseek-v4-flash")
@@ -168,7 +168,7 @@ Minimal hosted AGUI example:
 
 ```csharp
 using DeepSeek;
-using Microsoft.Agents.AI.DeepSeek;
+using DeepSeek.Agents.AI;
 using Microsoft.Agents.AI.Hosting.AGUI.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -192,9 +192,9 @@ If you want a ready-to-run reference, start from `sample/DeepSeek.Agui.Agent` an
 ## Repository Layout
 
 - `src/DeepSeek.Core`: typed SDK
-- `src/Microsoft.Agents.AI.DeepSeek`: AI abstraction adapter
+- `src/DeepSeek.Agents.AI`: AI abstraction adapter
 - `test/DeepSeek.Tests`: unit tests for the typed SDK
-- `test/Microsoft.Agents.AI.DeepSeek.UnitTests`: unit tests for the adapter
+- `test/DeepSeek.Agents.AI.UnitTests`: unit tests for the adapter
 - `test/DeepSeek.IntegrationTests`: live integration tests
 - `sample/`: example projects only
 
@@ -298,7 +298,7 @@ Targeted test commands:
 
 ```bash
 dotnet test test/DeepSeek.Tests/DeepSeek.Tests.csproj
-dotnet test test/Microsoft.Agents.AI.DeepSeek.UnitTests/Microsoft.Agents.AI.DeepSeek.UnitTests.csproj
+dotnet test test/DeepSeek.Agents.AI.UnitTests/DeepSeek.Agents.AI.UnitTests.csproj
 ```
 
 ## Request and response logging
@@ -347,5 +347,5 @@ Notes:
 
 ## Notes
 
-- Tests are maintained for `src/DeepSeek.Core` and `src/Microsoft.Agents.AI.DeepSeek`.
+- Tests are maintained for `src/DeepSeek.Core` and `src/DeepSeek.Agents.AI`.
 - Projects under `sample/` are examples and are not covered by dedicated test projects.

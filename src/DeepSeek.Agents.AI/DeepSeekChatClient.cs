@@ -5,7 +5,7 @@ using DeepSeek.Chat;
 using Microsoft.Extensions.AI;
 using AiChatMessage = Microsoft.Extensions.AI.ChatMessage;
 
-namespace Microsoft.Agents.AI.DeepSeek;
+namespace DeepSeek.Agents.AI;
 
 public sealed class DeepSeekChatClient : IChatClient
 {

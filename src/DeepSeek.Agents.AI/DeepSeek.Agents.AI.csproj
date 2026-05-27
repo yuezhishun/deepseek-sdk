@@ -7,7 +7,7 @@
     <Authors>Yue Zhishun</Authors>
     <Company>Yue Zhishun</Company>
     <Description>Agent Framework and Microsoft.Extensions.AI adapter for the DeepSeek typed client.</Description>
-    <PackageReleaseNotes>Initial 1.0.0 release of the Microsoft.Agents.AI.DeepSeek adapter.</PackageReleaseNotes>
+    <PackageReleaseNotes>Initial 1.0.0 release of the DeepSeek.Agents.AI adapter.</PackageReleaseNotes>
     <PackageProjectUrl>https://github.com/yuezhishun/deepseek-sdk</PackageProjectUrl>
     <RepositoryUrl>https://github.com/yuezhishun/deepseek-sdk</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
@@ -17,14 +17,14 @@
     <FileVersion>1.0.0.0</FileVersion>
     <PackageIcon>logo.png</PackageIcon>
     <Version>1.0.0</Version>
-    <PackageId>Microsoft.Agents.AI.DeepSeek</PackageId>
-    <AssemblyName>Microsoft.Agents.AI.DeepSeek</AssemblyName>
-    <RootNamespace>Microsoft.Agents.AI.DeepSeek</RootNamespace>
+    <PackageId>DeepSeek.Agents.AI</PackageId>
+    <AssemblyName>DeepSeek.Agents.AI</AssemblyName>
+    <RootNamespace>DeepSeek.Agents.AI</RootNamespace>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <OutputType>Library</OutputType>
     <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
     <NoWarn>1701;1702;1591;1570</NoWarn>
-    <Title>Microsoft.Agents.AI.DeepSeek</Title>
+    <Title>DeepSeek.Agents.AI</Title>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <SignAssembly>false</SignAssembly>
     <PackageOutputPath>./pack</PackageOutputPath>

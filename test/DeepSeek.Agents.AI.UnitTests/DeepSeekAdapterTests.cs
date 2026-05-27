@@ -8,12 +8,12 @@ using DeepSeek.Anthropic;
 using DeepSeek.Chat;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
-using Microsoft.Agents.AI.DeepSeek;
+using DeepSeek.Agents.AI;
 using Xunit;
 using AiChatMessage = Microsoft.Extensions.AI.ChatMessage;
 using WireChatMessage = DeepSeek.Chat.ChatMessage;
 
-namespace Microsoft.Agents.AI.DeepSeek.Tests;
+namespace DeepSeek.Agents.AI.Tests;
 
 #pragma warning disable MAAI001
 public class DeepSeekAdapterTests

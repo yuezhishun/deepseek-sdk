@@ -1,4 +1,4 @@
-namespace Microsoft.Agents.AI.DeepSeek;
+namespace DeepSeek.Agents.AI;
 
 /// <summary>
 /// DeepSeek-specific keys for <see cref="Microsoft.Extensions.AI.ChatOptions.AdditionalProperties"/>.

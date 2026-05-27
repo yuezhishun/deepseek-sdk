@@ -9,7 +9,7 @@ using WireChatToolChoiceFunction = DeepSeek.Chat.ChatToolChoiceFunction;
 using WireChatToolFunction = DeepSeek.Chat.ChatToolFunction;
 using DeepSeek.Chat;
 
-namespace Microsoft.Agents.AI.DeepSeek;
+namespace DeepSeek.Agents.AI;
 
 internal static class DeepSeekChatRequestMapper
 {

@@ -2,7 +2,7 @@ using System.Runtime.CompilerServices;
 using DeepSeek.Anthropic;
 using Microsoft.Extensions.AI;
 
-namespace Microsoft.Agents.AI.DeepSeek;
+namespace DeepSeek.Agents.AI;
 
 public sealed class DeepSeekAnthropicChatClient : IChatClient
 {

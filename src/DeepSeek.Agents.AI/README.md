@@ -1,11 +1,11 @@
-# Microsoft.Agents.AI.DeepSeek
+# DeepSeek.Agents.AI
 
 Adapter package for using the DeepSeek typed client with `Microsoft.Extensions.AI` and `Microsoft.Agents.AI`.
 
 ## Install
 
 ```bash
-dotnet add package Microsoft.Agents.AI.DeepSeek --version 1.0.0
+dotnet add package DeepSeek.Agents.AI --version 1.0.0
 ```
 
 This package depends on `DeepSeek.Core`.
@@ -14,7 +14,7 @@ This package depends on `DeepSeek.Core`.
 
 ```csharp
 using DeepSeek;
-using Microsoft.Agents.AI.DeepSeek;
+using DeepSeek.Agents.AI;
 using Microsoft.Extensions.AI;
 
 var client = new DeepSeekClient("your-api-key")
