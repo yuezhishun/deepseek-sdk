@@ -20,6 +20,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\DeepSeek\DeepSeek.csproj" />
+    <ProjectReference Include="..\..\src\DeepSeek.Core\DeepSeek.Core.csproj" />
   </ItemGroup>
 </Project>
