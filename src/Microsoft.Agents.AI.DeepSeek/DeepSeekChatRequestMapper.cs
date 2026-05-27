@@ -82,9 +82,10 @@ internal static class DeepSeekChatRequestMapper
             Stop = options?.StopSequences?.ToList(),
         };
 
-        if (!string.IsNullOrWhiteSpace(options?.Instructions))
+        var instructions = options?.Instructions;
+        if (!string.IsNullOrWhiteSpace(instructions))
         {
-            request.Messages.Add(new WireChatMessage { Role = "system", Content = options.Instructions });
+            request.Messages.Add(new WireChatMessage { Role = "system", Content = instructions });
         }
 
         foreach (var message in messages)
@@ -114,28 +115,31 @@ internal static class DeepSeekChatRequestMapper
     internal static ChatResponse MapToChatResponse(ChatCompletion response)
     {
         var choice = response.Choices.FirstOrDefault();
-        var assistant = new AiChatMessage(ChatRole.Assistant, choice?.Message?.Content ?? string.Empty)
+        var message = choice?.Message;
+        var assistant = new AiChatMessage(ChatRole.Assistant, message?.Content ?? string.Empty)
         {
-            RawRepresentation = choice?.Message,
+            RawRepresentation = message,
         };
 
-        if (!string.IsNullOrWhiteSpace(choice?.Message?.ReasoningContent))
+        var reasoningContent = message?.ReasoningContent;
+        if (!string.IsNullOrWhiteSpace(reasoningContent))
         {
             assistant.AdditionalProperties = new AdditionalPropertiesDictionary
             {
-                ["reasoning_content"] = choice.Message.ReasoningContent,
+                ["reasoning_content"] = reasoningContent,
             };
-            assistant.Contents.Add(new TextReasoningContent(choice.Message.ReasoningContent));
+            assistant.Contents.Add(new TextReasoningContent(reasoningContent));
         }
 
-        if (choice?.Message?.ToolCalls is not null)
+        if (message?.ToolCalls is { } toolCalls)
         {
-            foreach (var toolCall in choice.Message.ToolCalls)
+            foreach (var toolCall in toolCalls)
             {
+                var function = toolCall.Function;
                 assistant.Contents.Add(new FunctionCallContent(
                     toolCall.Id ?? string.Empty,
-                    toolCall.Function.Name ?? string.Empty,
-                    ParseArguments(toolCall.Function.Arguments)));
+                    function?.Name ?? string.Empty,
+                    ParseArguments(function?.Arguments)));
             }
         }
 
@@ -156,9 +160,10 @@ internal static class DeepSeekChatRequestMapper
             result.AdditionalProperties["usage_total_tokens"] = response.Usage.TotalTokens;
         }
 
-        if (!string.IsNullOrWhiteSpace(choice?.FinishReason))
+        var finishReason = choice?.FinishReason;
+        if (!string.IsNullOrWhiteSpace(finishReason))
         {
-            result.AdditionalProperties["finish_reason"] = choice.FinishReason;
+            result.AdditionalProperties["finish_reason"] = finishReason;
         }
 
         return result;
@@ -342,8 +347,15 @@ internal static class DeepSeekChatRequestMapper
         }
     }
 
-    private static Dictionary<string, object?> ParseArguments(string json)
-        => JsonSerializer.Deserialize<Dictionary<string, object?>>(json) ?? [];
+    private static Dictionary<string, object?> ParseArguments(string? json)
+    {
+        if (json is null || string.IsNullOrWhiteSpace(json))
+        {
+            return [];
+        }
+
+        return JsonSerializer.Deserialize<Dictionary<string, object?>>(json) ?? [];
+    }
 
     private static string? TryGetString(AiChatMessage message, string key)
         => message.AdditionalProperties is not null && message.AdditionalProperties.TryGetValue(key, out var value) ? value as string : null;

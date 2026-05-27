@@ -45,6 +45,11 @@ app.MapGet("/agent/health", () => Results.Ok(new
     endpoints = new[] { "/agui" }
 }));
 var apiKey = app.Configuration["apiKey"];
+if (string.IsNullOrWhiteSpace(apiKey))
+{
+    throw new InvalidOperationException("Configuration value 'apiKey' is required.");
+}
+
 var model = app.Configuration["DeepSeek:Model"] ?? "deepseek-v4-flash";
 var loggingSection = app.Configuration.GetSection("DeepSeek:Logging");
 var enablePipelineLogging = loggingSection.GetValue<bool>("Enabled");

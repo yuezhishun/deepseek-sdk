@@ -50,22 +50,25 @@ public sealed class DeepSeekAnthropicChatClient : IChatClient
             request,
             new System.ClientModel.Primitives.RequestOptions { CancellationToken = cancellationToken }).ConfigureAwait(false))
         {
-            if (!string.IsNullOrWhiteSpace(chunk.Delta?.Thinking))
+            var delta = chunk.Delta;
+            var thinking = delta?.Thinking;
+            if (!string.IsNullOrWhiteSpace(thinking))
             {
-                yield return new ChatResponseUpdate(ChatRole.Assistant, [new TextReasoningContent(chunk.Delta.Thinking)])
+                yield return new ChatResponseUpdate(ChatRole.Assistant, [new TextReasoningContent(thinking)])
                 {
                     AdditionalProperties = new AdditionalPropertiesDictionary
                     {
-                        ["reasoning_content"] = chunk.Delta.Thinking,
+                        ["reasoning_content"] = thinking,
                         ["is_reasoning"] = true,
                     },
                     RawRepresentation = chunk,
                 };
             }
 
-            if (!string.IsNullOrWhiteSpace(chunk.Delta?.Text))
+            var text = delta?.Text;
+            if (!string.IsNullOrWhiteSpace(text))
             {
-                yield return new ChatResponseUpdate(ChatRole.Assistant, chunk.Delta.Text)
+                yield return new ChatResponseUpdate(ChatRole.Assistant, text)
                 {
                     RawRepresentation = chunk,
                 };
