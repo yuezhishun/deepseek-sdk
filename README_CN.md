@@ -2,16 +2,25 @@
 
 `deepseek-sdk` 是一个适用于 DeepSeek 的 .NET SDK，包含两个主要库：
 
-- `src/DeepSeek`：基于 `System.ClientModel` 与 HTTP pipeline 构建，可获得一致的请求处理模型、对日志、重试、诊断等横切能力更好的控制，也更适合构建可扩展的强类型 SDK 客户端
+- `src/DeepSeek.Core`：基于 `System.ClientModel` 与 HTTP pipeline 构建，可获得一致的请求处理模型、对日志、重试、诊断等横切能力更好的控制，也更适合构建可扩展的强类型 SDK 客户端
 - `src/Microsoft.Agents.AI.DeepSeek`：面向 Microsoft Agent Framework 的扩展与适配支持
 - 包含 DeepSeek 的两个 Beta 接口支持：对话前缀续写（chat prefix continuation）和 FIM 补全（FIM completion）
 - 按照 DeepSeek 官方思考模式文档实现了 thinking mode，包括推理开关、推理强度控制、`reasoning_content` 处理，以及多轮对话和工具调用下的续推理语义
 
+## 安装
+
+```bash
+dotnet add package DeepSeek.Core --version 1.0.0
+dotnet add package Microsoft.Agents.AI.DeepSeek --version 1.0.0
+```
+
+核心 NuGet 包名为 `DeepSeek.Core`，公共命名空间仍保持为 `DeepSeek` 与 `DeepSeek.*`。
+
 ## 项目
 
-### `src/DeepSeek`
+### `src/DeepSeek.Core`
 
-`DeepSeek` 包是一个底层强类型 SDK，用于在 .NET 中调用 DeepSeek API。
+`DeepSeek.Core` 包是一个底层强类型 SDK，用于在 .NET 中调用 DeepSeek API。
 
 它包含：
 
@@ -182,7 +191,7 @@ app.Run();
 
 ## 仓库结构
 
-- `src/DeepSeek`：强类型 SDK
+- `src/DeepSeek.Core`：强类型 SDK
 - `src/Microsoft.Agents.AI.DeepSeek`：AI 抽象层适配器
 - `test/DeepSeek.Tests`：强类型 SDK 的单元测试
 - `test/Microsoft.Agents.AI.DeepSeek.UnitTests`：适配器的单元测试
@@ -338,5 +347,5 @@ var client = new DeepSeekClient("your-api-key", clientOptions);
 
 ## 说明
 
-- 当前维护测试的范围包括 `src/DeepSeek` 和 `src/Microsoft.Agents.AI.DeepSeek`
+- 当前维护测试的范围包括 `src/DeepSeek.Core` 和 `src/Microsoft.Agents.AI.DeepSeek`
 - `sample/` 下的项目仅用于示例演示，不包含专门的测试项目
