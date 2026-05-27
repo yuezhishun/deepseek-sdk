@@ -39,7 +39,7 @@ jobs:
       - name: Pack Microsoft.Agents.AI.DeepSeek
         run: dotnet pack src/Microsoft.Agents.AI.DeepSeek/Microsoft.Agents.AI.DeepSeek.csproj --configuration "$CONFIGURATION" --no-restore --output "$PACKAGE_OUTPUT" -p:ContinuousIntegrationBuild=true
 
-      - name: Publish packages
+      - name: Validate NuGet API key
         shell: pwsh
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
@@ -47,10 +47,30 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($env:NUGET_API_KEY)) {
             throw "GitHub Actions secret NUGET_API_KEY is not configured."
           }
+          Write-Host "NUGET_API_KEY is configured."
 
-          Get-ChildItem $env:PACKAGE_OUTPUT -Filter *.nupkg | ForEach-Object {
-            dotnet nuget push $_.FullName `
-              --api-key $env:NUGET_API_KEY `
-              --source https://api.nuget.org/v3/index.json `
-              --skip-duplicate
-          }
+      - name: List packages
+        shell: pwsh
+        run: Get-ChildItem $env:PACKAGE_OUTPUT | Select-Object Name,Length
+
+      - name: Publish DeepSeek.Core
+        shell: pwsh
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          dotnet nuget push "$env:PACKAGE_OUTPUT/DeepSeek.Core.1.0.0.nupkg" `
+            --api-key $env:NUGET_API_KEY `
+            --source https://api.nuget.org/v3/index.json `
+            --skip-duplicate `
+            --no-symbols
+
+      - name: Publish Microsoft.Agents.AI.DeepSeek
+        shell: pwsh
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          dotnet nuget push "$env:PACKAGE_OUTPUT/Microsoft.Agents.AI.DeepSeek.1.0.0.nupkg" `
+            --api-key $env:NUGET_API_KEY `
+            --source https://api.nuget.org/v3/index.json `
+            --skip-duplicate `
+            --no-symbols
