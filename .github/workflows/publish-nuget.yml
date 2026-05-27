@@ -36,8 +36,8 @@ jobs:
       - name: Pack DeepSeek.Core
         run: dotnet pack src/DeepSeek.Core/DeepSeek.Core.csproj --configuration "$CONFIGURATION" --no-restore --output "$PACKAGE_OUTPUT" -p:ContinuousIntegrationBuild=true
 
-      - name: Pack Microsoft.Agents.AI.DeepSeek
-        run: dotnet pack src/Microsoft.Agents.AI.DeepSeek/Microsoft.Agents.AI.DeepSeek.csproj --configuration "$CONFIGURATION" --no-restore --output "$PACKAGE_OUTPUT" -p:ContinuousIntegrationBuild=true
+      - name: Pack DeepSeek.Agents.AI
+        run: dotnet pack src/DeepSeek.Agents.AI/DeepSeek.Agents.AI.csproj --configuration "$CONFIGURATION" --no-restore --output "$PACKAGE_OUTPUT" -p:ContinuousIntegrationBuild=true
 
       - name: Validate NuGet API key
         shell: pwsh
@@ -64,12 +64,12 @@ jobs:
             --skip-duplicate `
             --no-symbols
 
-      - name: Publish Microsoft.Agents.AI.DeepSeek
+      - name: Publish DeepSeek.Agents.AI
         shell: pwsh
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         run: |
-          dotnet nuget push "$env:PACKAGE_OUTPUT/Microsoft.Agents.AI.DeepSeek.1.0.0.nupkg" `
+          dotnet nuget push "$env:PACKAGE_OUTPUT/DeepSeek.Agents.AI.1.0.0.nupkg" `
             --api-key $env:NUGET_API_KEY `
             --source https://api.nuget.org/v3/index.json `
             --skip-duplicate `

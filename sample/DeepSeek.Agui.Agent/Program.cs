@@ -1,5 +1,5 @@
 using DeepSeek;
-using Microsoft.Agents.AI.DeepSeek;
+using DeepSeek.Agents.AI;
 using Microsoft.Agents.AI.Hosting.AGUI.AspNetCore;
 using Microsoft.Extensions.AI;
 using Serilog;
@@ -71,7 +71,7 @@ var clientOptions = new DeepSeekClientOptions
 var chatClient = new DeepSeekClient(apiKey, clientOptions).GetChatClient(model); 
 var Agent = chatClient.AsAIAgent(
     name: "DeepSeekAgUiHostedAgent",
-    instructions: "You are a concise AG-UI demo assistant. Use tools when the user asks about listings, pricing, or scheduling.");
+    instructions: "You are a concise AG-UI demo assistant.");
 app.MapAGUI("/agui", Agent);
 
 

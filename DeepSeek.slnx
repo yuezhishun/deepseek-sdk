@@ -7,11 +7,11 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/DeepSeek.Core/DeepSeek.Core.csproj" />
-    <Project Path="src/Microsoft.Agents.AI.DeepSeek/Microsoft.Agents.AI.DeepSeek.csproj" />
+    <Project Path="src/DeepSeek.Agents.AI/DeepSeek.Agents.AI.csproj" />
   </Folder>
   <Folder Name="/test/">
     <Project Path="test/DeepSeek.IntegrationTests/DeepSeek.IntegrationTests.csproj" />
     <Project Path="test/DeepSeek.Tests/DeepSeek.Tests.csproj" />
-    <Project Path="test/Microsoft.Agents.AI.DeepSeek.UnitTests/Microsoft.Agents.AI.DeepSeek.UnitTests.csproj" />
+    <Project Path="test/DeepSeek.Agents.AI.UnitTests/DeepSeek.Agents.AI.UnitTests.csproj" />
   </Folder>
 </Solution>

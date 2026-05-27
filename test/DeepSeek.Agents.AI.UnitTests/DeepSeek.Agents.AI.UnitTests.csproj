@@ -20,7 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Microsoft.Agents.AI.DeepSeek\Microsoft.Agents.AI.DeepSeek.csproj" />
+    <ProjectReference Include="..\..\src\DeepSeek.Agents.AI\DeepSeek.Agents.AI.csproj" />
     <ProjectReference Include="..\..\src\DeepSeek.Core\DeepSeek.Core.csproj" />
   </ItemGroup>
 </Project>

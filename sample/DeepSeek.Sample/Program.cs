@@ -1,4 +1,4 @@
-using Microsoft.Agents.AI.DeepSeek;
+using DeepSeek.Agents.AI;
 using DeepSeek;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
