@@ -189,6 +189,8 @@ app.Run();
 
 如果你需要一个可直接运行的参考实现，可以从 `sample/DeepSeek.Agui.Agent` 开始，再将 `sample/DeepSeek.Agui.Web` 连接到该端点。
 
+运行示例前，请将 `sample/appsettings.dev.json` 重命名为 `sample/appsettings.json`，并把其中的 `apiKey` 替换为你的真实 DeepSeek API key。
+
 ## 仓库结构
 
 - `src/DeepSeek.Core`：强类型 SDK

@@ -17,16 +17,11 @@
     <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
   </ItemGroup>
-
+  <ItemGroup>
+	<Content Include="..\appsettings.json" Link="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\DeepSeek.Core\DeepSeek.Core.csproj" />
     <ProjectReference Include="..\..\src\DeepSeek.Agents.AI\DeepSeek.Agents.AI.csproj" />
   </ItemGroup>
-
-  <ItemGroup>
-    <None Update="appsettings.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
-
 </Project>

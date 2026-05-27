@@ -8,22 +8,14 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Remove="appsettings.json" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Include="appsettings.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
-
-  <ItemGroup>
     <PackageReference Include="Microsoft.Agents.AI.Hosting.AGUI.AspNetCore" Version="1.6.1-preview.260514.1" />
     <PackageReference Include="Microsoft.Extensions.AI" Version="10.6.0" />
 	<PackageReference Include="Serilog.Extensions.Logging" Version="10.0.0" />
 	<PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
   </ItemGroup>
-
+  <ItemGroup>
+	<Content Include="..\appsettings.json" Link="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\DeepSeek.Core\DeepSeek.Core.csproj" />
     <ProjectReference Include="..\..\src\DeepSeek.Agents.AI\DeepSeek.Agents.AI.csproj" />

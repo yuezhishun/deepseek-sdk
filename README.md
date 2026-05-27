@@ -189,6 +189,8 @@ app.Run();
 
 If you want a ready-to-run reference, start from `sample/DeepSeek.Agui.Agent` and connect `sample/DeepSeek.Agui.Web` to that endpoint.
 
+Before running the sample locally, rename `sample/appsettings.dev.json` to `sample/appsettings.json` and replace the `apiKey` value with your real DeepSeek API key.
+
 ## Repository Layout
 
 - `src/DeepSeek.Core`: typed SDK
