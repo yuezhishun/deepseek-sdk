@@ -431,3 +431,6 @@ FodyWeavers.xsd
 
 # Local sample secrets
 sample/DeepSeek.Sample/appsettings.json
+
+# Local development notes and process archive
+docs/

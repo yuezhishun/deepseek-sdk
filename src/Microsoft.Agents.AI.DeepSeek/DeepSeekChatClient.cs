@@ -65,33 +65,36 @@ public sealed class DeepSeekChatClient : IChatClient
                 lastChunk = chunk;
                 messageId ??= chunk.Id ?? Guid.NewGuid().ToString("N");
                 var choice = chunk.Choices.Count > 0 ? chunk.Choices[0] : null;
+                var delta = choice?.Delta;
+                var reasoningContent = delta?.ReasoningContent;
 
-                if (!string.IsNullOrWhiteSpace(choice?.Delta?.ReasoningContent))
+                if (reasoningContent is not null && !string.IsNullOrWhiteSpace(reasoningContent))
                 {
-                    turnState.AppendReasoning(choice.Delta.ReasoningContent!);
+                    turnState.AppendReasoning(reasoningContent);
                     yield return new ChatResponseUpdate(
                         ChatRole.Assistant,
-                        [new TextReasoningContent(choice.Delta.ReasoningContent!)])
+                        [new TextReasoningContent(reasoningContent)])
                     {
                         RawRepresentation = chunk,
                         MessageId = messageId,
                         AdditionalProperties = new AdditionalPropertiesDictionary
                         {
-                            ["reasoning_content"] = choice.Delta.ReasoningContent,
+                            ["reasoning_content"] = reasoningContent,
                             ["is_reasoning"] = true,
                         },
                     };
                 }
 
-                if (choice?.Delta?.ToolCalls is not null)
+                if (delta?.ToolCalls is { } deltaToolCalls)
                 {
-                    turnState.ApplyToolCalls(choice.Delta.ToolCalls);
+                    turnState.ApplyToolCalls(deltaToolCalls);
                 }
 
-                if (!string.IsNullOrWhiteSpace(choice?.Delta?.Content))
+                var content = delta?.Content;
+                if (content is not null && !string.IsNullOrWhiteSpace(content))
                 {
-                    turnState.AppendContent(choice.Delta.Content!);
-                    yield return new ChatResponseUpdate(ChatRole.Assistant, choice.Delta.Content!)
+                    turnState.AppendContent(content);
+                    yield return new ChatResponseUpdate(ChatRole.Assistant, content)
                     {
                         RawRepresentation = chunk,
                         MessageId = messageId,
@@ -247,7 +250,8 @@ public sealed class DeepSeekChatClient : IChatClient
 
             foreach (var state in _toolCallStates.OrderBy(static pair => pair.Key).Select(static pair => pair.Value))
             {
-                if (string.IsNullOrWhiteSpace(state.Name) || !state.HasArguments)
+                var name = state.Name;
+                if (name is null || string.IsNullOrWhiteSpace(name) || !state.HasArguments)
                 {
                     toolCalls = [];
                     return false;
@@ -264,7 +268,7 @@ public sealed class DeepSeekChatClient : IChatClient
                     return false;
                 }
 
-                toolCalls.Add(new FunctionCallContent(state.Id ?? string.Empty, state.Name!, arguments));
+                toolCalls.Add(new FunctionCallContent(state.Id ?? string.Empty, name, arguments));
             }
 
             return true;
@@ -344,14 +348,16 @@ public sealed class DeepSeekChatClient : IChatClient
                 Id = toolCall.Id;
             }
 
-            if (string.IsNullOrWhiteSpace(Name) && !string.IsNullOrWhiteSpace(toolCall.Function?.Name))
+            var function = toolCall.Function;
+            var name = function?.Name;
+            if (string.IsNullOrWhiteSpace(Name) && !string.IsNullOrWhiteSpace(name))
             {
-                Name = toolCall.Function.Name;
+                Name = name;
             }
 
-            if (toolCall.Function?.Arguments is not null)
+            if (function?.Arguments is { } arguments)
             {
-                Arguments.Append(toolCall.Function.Arguments);
+                Arguments.Append(arguments);
                 HasArguments = true;
             }
         }
