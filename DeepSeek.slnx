@@ -6,7 +6,7 @@
     <Project Path="sample/DeepSeek.Sample/DeepSeek.Sample.csproj" />
   </Folder>
   <Folder Name="/src/">
-    <Project Path="src/DeepSeek/DeepSeek.csproj" />
+    <Project Path="src/DeepSeek.Core/DeepSeek.Core.csproj" />
     <Project Path="src/Microsoft.Agents.AI.DeepSeek/Microsoft.Agents.AI.DeepSeek.csproj" />
   </Folder>
   <Folder Name="/test/">

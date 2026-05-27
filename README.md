@@ -2,16 +2,25 @@
 
 `deepseek-sdk` is a .NET SDK for DeepSeek with two primary libraries:
 
-- `src/DeepSeek`: built on `System.ClientModel` and the HTTP pipeline model, providing a consistent request handling model, better control over cross-cutting concerns such as logging, retries, and diagnostics, and a stronger foundation for extensible typed SDK clients
+- `src/DeepSeek.Core`: built on `System.ClientModel` and the HTTP pipeline model, providing a consistent request handling model, better control over cross-cutting concerns such as logging, retries, and diagnostics, and a stronger foundation for extensible typed SDK clients
 - `src/Microsoft.Agents.AI.DeepSeek`: extension and adapter support for Microsoft Agent Framework
 - support for DeepSeek's two Beta APIs: chat prefix continuation and FIM completion
 - implements thinking mode following DeepSeek's official documentation, including reasoning enablement, reasoning effort control, `reasoning_content` handling, and continued reasoning semantics across multi-turn conversations and tool calls
 
+## Installation
+
+```bash
+dotnet add package DeepSeek.Core --version 1.0.0
+dotnet add package Microsoft.Agents.AI.DeepSeek --version 1.0.0
+```
+
+The core NuGet package is named `DeepSeek.Core`, while the public namespaces remain `DeepSeek` and `DeepSeek.*`.
+
 ## Projects
 
-### `src/DeepSeek`
+### `src/DeepSeek.Core`
 
-The `DeepSeek` package is the low-level typed SDK for calling DeepSeek APIs from .NET.
+The `DeepSeek.Core` package is the low-level typed SDK for calling DeepSeek APIs from .NET.
 
 It includes:
 
@@ -182,7 +191,7 @@ If you want a ready-to-run reference, start from `sample/DeepSeek.Agui.Agent` an
 
 ## Repository Layout
 
-- `src/DeepSeek`: typed SDK
+- `src/DeepSeek.Core`: typed SDK
 - `src/Microsoft.Agents.AI.DeepSeek`: AI abstraction adapter
 - `test/DeepSeek.Tests`: unit tests for the typed SDK
 - `test/Microsoft.Agents.AI.DeepSeek.UnitTests`: unit tests for the adapter
@@ -338,5 +347,5 @@ Notes:
 
 ## Notes
 
-- Tests are maintained for `src/DeepSeek` and `src/Microsoft.Agents.AI.DeepSeek`.
+- Tests are maintained for `src/DeepSeek.Core` and `src/Microsoft.Agents.AI.DeepSeek`.
 - Projects under `sample/` are examples and are not covered by dedicated test projects.

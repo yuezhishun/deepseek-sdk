@@ -1,0 +1,63 @@
+name: Publish NuGet
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      CONFIGURATION: Release
+      PACKAGE_OUTPUT: artifacts/packages
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Restore
+        run: dotnet restore DeepSeek.slnx
+
+      - name: Test
+        run: dotnet test DeepSeek.slnx --configuration "$CONFIGURATION" --no-restore
+
+      - name: Pack DeepSeek.Core
+        run: dotnet pack src/DeepSeek.Core/DeepSeek.Core.csproj --configuration "$CONFIGURATION" --no-restore --output "$PACKAGE_OUTPUT" -p:ContinuousIntegrationBuild=true
+
+      - name: Pack Microsoft.Agents.AI.DeepSeek
+        run: dotnet pack src/Microsoft.Agents.AI.DeepSeek/Microsoft.Agents.AI.DeepSeek.csproj --configuration "$CONFIGURATION" --no-restore --output "$PACKAGE_OUTPUT" -p:ContinuousIntegrationBuild=true
+
+      - name: Publish packages
+        shell: pwsh
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:NUGET_API_KEY)) {
+            throw "GitHub Actions secret NUGET_API_KEY is not configured."
+          }
+
+          Get-ChildItem $env:PACKAGE_OUTPUT -Filter *.nupkg | ForEach-Object {
+            dotnet nuget push $_.FullName `
+              --api-key $env:NUGET_API_KEY `
+              --source https://api.nuget.org/v3/index.json `
+              --skip-duplicate
+          }
+
+          Get-ChildItem $env:PACKAGE_OUTPUT -Filter *.snupkg | ForEach-Object {
+            dotnet nuget push $_.FullName `
+              --api-key $env:NUGET_API_KEY `
+              --source https://api.nuget.org/v3/index.json `
+              --skip-duplicate
+          }
