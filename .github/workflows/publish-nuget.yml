@@ -53,12 +53,24 @@ jobs:
         shell: pwsh
         run: Get-ChildItem $env:PACKAGE_OUTPUT | Select-Object Name,Length
 
+      - name: Resolve package version
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}"
+          if ($version.StartsWith("v")) {
+            $version = $version.Substring(1)
+          }
+          if ([string]::IsNullOrWhiteSpace($version)) {
+            throw "Unable to resolve package version from ref '${{ github.ref_name }}'."
+          }
+          "PACKAGE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Publish DeepSeek.Core
         shell: pwsh
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         run: |
-          dotnet nuget push "$env:PACKAGE_OUTPUT/DeepSeek.Core.1.0.0.nupkg" `
+          dotnet nuget push "$env:PACKAGE_OUTPUT/DeepSeek.Core.$env:PACKAGE_VERSION.nupkg" `
             --api-key $env:NUGET_API_KEY `
             --source https://api.nuget.org/v3/index.json `
             --skip-duplicate `
@@ -69,7 +81,7 @@ jobs:
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         run: |
-          dotnet nuget push "$env:PACKAGE_OUTPUT/DeepSeek.Agents.AI.1.0.0.nupkg" `
+          dotnet nuget push "$env:PACKAGE_OUTPUT/DeepSeek.Agents.AI.$env:PACKAGE_VERSION.nupkg" `
             --api-key $env:NUGET_API_KEY `
             --source https://api.nuget.org/v3/index.json `
             --skip-duplicate `

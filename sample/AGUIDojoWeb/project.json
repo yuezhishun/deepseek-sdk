@@ -1,0 +1,53 @@
+{
+  "name": "agui-vue-web",
+  "targets": {
+    "dev": {
+      "executor": "nx:run-commands",
+      "dependsOn": [],
+      "options": {
+        "command": "pnpm dev",
+        "cwd": "apps/agui-vue"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "dependsOn": [],
+      "options": {
+        "command": "pnpm build",
+        "cwd": "apps/agui-vue"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "dependsOn": [],
+      "options": {
+        "command": "pnpm lint",
+        "cwd": "apps/agui-vue"
+      }
+    },
+    "check-types": {
+      "executor": "nx:run-commands",
+      "dependsOn": [],
+      "options": {
+        "command": "pnpm check-types",
+        "cwd": "apps/agui-vue"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "dependsOn": [],
+      "options": {
+        "command": "pnpm test",
+        "cwd": "apps/agui-vue"
+      }
+    },
+    "e2e": {
+      "executor": "nx:run-commands",
+      "dependsOn": [],
+      "options": {
+        "command": "pnpm e2e",
+        "cwd": "apps/agui-vue"
+      }
+    }
+  }
+}

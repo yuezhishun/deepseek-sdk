@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/sample/">
+    <Project Path="sample/AGUIDojoServer/AGUIDojoServer.csproj" />
     <Project Path="sample/DeepSeek.Agui.Agent/DeepSeek.Agui.Agent.csproj" />
     <Project Path="sample/DeepSeek.Agui.Console/DeepSeek.Agui.Console.csproj" />
     <Project Path="sample/DeepSeek.Agui.CustomClient/DeepSeek.Agui.CustomClient.csproj" />

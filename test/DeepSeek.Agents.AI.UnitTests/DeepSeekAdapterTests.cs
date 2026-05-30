@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http;
 using System.Text;
+using System.Text.Json;
 using System.ClientModel;
 using System.Threading.Channels;
 using DeepSeek;
@@ -66,6 +67,48 @@ public class DeepSeekAdapterTests
         Assert.Equal("done", assistant.Text);
         Assert.Equal("think", assistant.AdditionalProperties?["reasoning_content"]);
         Assert.Single(assistant.Contents.OfType<FunctionCallContent>());
+    }
+
+    [Fact]
+    public async Task AsIChatClient_MapsAIFunctionDeclarationWithoutServerSideContinuation()
+    {
+        RecordingStreamingChatClient.ClearRecordedRequests();
+        var client = new RecordingStreamingChatClient(
+            [
+                CreateChunk(toolCalls: [CreateToolCall(0, "call_frontend", "show_haiku", "{\"topic\":\"spring\"}")], finishReason: "tool_calls"),
+            ]).AsIChatClient();
+
+        var updates = new List<ChatResponseUpdate>();
+        await foreach (var update in client.GetStreamingResponseAsync(
+            [new AiChatMessage(ChatRole.User, "Show a haiku card.")],
+            new ChatOptions
+            {
+                Tools =
+                [
+                    CreateDeclaration(
+                        "show_haiku",
+                        "Render a haiku card.",
+                        """
+                        {
+                          "type": "object",
+                          "properties": {
+                            "topic": { "type": "string" }
+                          },
+                          "required": ["topic"]
+                        }
+                        """),
+                ],
+            }))
+        {
+            updates.Add(update);
+        }
+
+        var request = Assert.Single(RecordingStreamingChatClient.RecordedRequests);
+        var tool = Assert.Single(request.Tools!);
+        Assert.Equal("show_haiku", tool.Function.Name);
+        Assert.Equal("Render a haiku card.", tool.Function.Description);
+        Assert.Equal(1, updates.OfType<ChatResponseUpdate>().Count(static update => update.Contents.OfType<FunctionCallContent>().Any()));
+        Assert.DoesNotContain(updates, static update => update.Role == ChatRole.Tool);
     }
 
     [Fact]
@@ -144,6 +187,39 @@ public class DeepSeekAdapterTests
     }
 
     [Fact]
+    public async Task AsIChatClient_DoesNotAutoInvokeSingleExecutableTool()
+    {
+        RecordingStreamingChatClient.ClearRecordedRequests();
+        var client = new RecordingStreamingChatClient(
+            [
+                CreateChunk(
+                    reasoning: "Need one tool before answering.",
+                    toolCalls: [CreateToolCall(0, "call_alpha", "get_alpha", "{}")],
+                    finishReason: "tool_calls"),
+            ]).AsIChatClient();
+
+        var updates = new List<ChatResponseUpdate>();
+        await foreach (var update in client.GetStreamingResponseAsync(
+            [new AiChatMessage(ChatRole.User, "Call one tool.")],
+            new ChatOptions
+            {
+                Tools =
+                [
+                    AIFunctionFactory.Create(() => "tool-alpha", "get_alpha", "Returns alpha."),
+                ],
+            }))
+        {
+            updates.Add(update);
+        }
+
+        Assert.Single(RecordingStreamingChatClient.RecordedRequests);
+        var toolCallUpdate = Assert.Single(updates, static update => update.Contents.OfType<FunctionCallContent>().Any());
+        Assert.Equal("Need one tool before answering.", toolCallUpdate.AdditionalProperties?["reasoning_content"]);
+        Assert.Single(toolCallUpdate.Contents.OfType<FunctionCallContent>());
+        Assert.DoesNotContain(updates, static update => update.Role == ChatRole.Tool);
+    }
+
+    [Fact]
     public async Task AsIChatClient_MapsGroupedToolResultsToSeparateWireMessages()
     {
         var client = new RecordingResponseChatClient(new ChatCompletion
@@ -195,6 +271,51 @@ public class DeepSeekAdapterTests
                 Assert.Equal("call_beta", message.ToolCallId);
                 Assert.Equal("tool-beta", message.Content);
             });
+    }
+
+    [Fact]
+    public async Task AsIChatClient_StreamingToolUpdate_DoesNotReplayPriorText()
+    {
+        var client = new RecordingStreamingChatClient(
+            [
+                CreateChunk(reasoning: "Think first."),
+                CreateChunk(content: "Draft answer."),
+                CreateChunk(
+                    toolCalls: [CreateToolCall(0, "call_weather", "get_weather", "{\"city\":\"Hangzhou\"}")],
+                    finishReason: "tool_calls"),
+            ]).AsIChatClient();
+
+        var updates = new List<ChatResponseUpdate>();
+        await foreach (var update in client.GetStreamingResponseAsync(
+            [new AiChatMessage(ChatRole.User, "Need weather.")],
+            new ChatOptions
+            {
+                Tools =
+                [
+                    CreateDeclaration(
+                        "get_weather",
+                        "Get weather.",
+                        """
+                        {
+                          "type": "object",
+                          "properties": {
+                            "city": { "type": "string" }
+                          },
+                          "required": ["city"]
+                        }
+                        """),
+                ],
+            }))
+        {
+            updates.Add(update);
+        }
+
+        var finalAssistantUpdate = Assert.Single(updates, static update => update.Contents.OfType<FunctionCallContent>().Any());
+        Assert.DoesNotContain(finalAssistantUpdate.Contents, static content => content is TextContent);
+        Assert.Equal("Think first.", finalAssistantUpdate.AdditionalProperties?["reasoning_content"]);
+        var functionCall = Assert.Single(finalAssistantUpdate.Contents.OfType<FunctionCallContent>());
+        Assert.Equal("get_weather", functionCall.Name);
+        Assert.Equal(1, updates.Count(static update => update.Text == "Draft answer."));
     }
 
     [Fact]
@@ -270,6 +391,129 @@ public class DeepSeekAdapterTests
                 Assert.Equal("call_beta", message.ToolCallId);
                 Assert.Equal("\"tool-beta\"", message.Content);
             });
+    }
+
+    [Fact]
+    public async Task AsIChatClient_BindsIntegerArgumentsToIntParametersDuringGroupedContinuation()
+    {
+        int? receivedIndex = null;
+        var client = new RecordingStreamingChatClient(
+            [
+                CreateChunk(
+                    toolCalls:
+                    [
+                        CreateToolCall(0, "call_step", "update_plan_step", "{\"index\":1}"),
+                        CreateToolCall(1, "call_noop", "noop", "{}"),
+                    ],
+                    finishReason: "tool_calls"),
+            ],
+            [
+                CreateChunk(content: "done", finishReason: "stop"),
+            ]).AsIChatClient();
+
+        await foreach (var _ in client.GetStreamingResponseAsync(
+            [new AiChatMessage(ChatRole.User, "Update the first step.")],
+            new ChatOptions
+            {
+                Tools =
+                [
+                    AIFunctionFactory.Create((int index) =>
+                    {
+                        receivedIndex = index;
+                        return "ok";
+                    }, "update_plan_step", "Update the step."),
+                    AIFunctionFactory.Create(() => "noop", "noop", "No operation."),
+                ],
+            }))
+        {
+        }
+
+        Assert.Equal(1, receivedIndex);
+    }
+
+    [Fact]
+    public async Task AsIChatClient_PreservesInt64ArgumentsOutsideInt32RangeDuringGroupedContinuation()
+    {
+        long? receivedIndex = null;
+        var client = new RecordingStreamingChatClient(
+            [
+                CreateChunk(
+                    toolCalls:
+                    [
+                        CreateToolCall(0, "call_step", "update_plan_step", "{\"index\":2147483648}"),
+                        CreateToolCall(1, "call_noop", "noop", "{}"),
+                    ],
+                    finishReason: "tool_calls"),
+            ],
+            [
+                CreateChunk(content: "done", finishReason: "stop"),
+            ]).AsIChatClient();
+
+        await foreach (var _ in client.GetStreamingResponseAsync(
+            [new AiChatMessage(ChatRole.User, "Update the large step.")],
+            new ChatOptions
+            {
+                Tools =
+                [
+                    AIFunctionFactory.Create((long index) =>
+                    {
+                        receivedIndex = index;
+                        return "ok";
+                    }, "update_plan_step", "Update the step."),
+                    AIFunctionFactory.Create(() => "noop", "noop", "No operation."),
+                ],
+            }))
+        {
+        }
+
+        Assert.Equal(2147483648L, receivedIndex);
+    }
+
+    [Fact]
+    public async Task AsIChatClient_StopsAutomaticContinuationForRepeatedGroupedToolRounds()
+    {
+        RecordingStreamingChatClient.ClearRecordedRequests();
+        var client = new RecordingStreamingChatClient(
+            [
+                CreateChunk(
+                    toolCalls:
+                    [
+                        CreateToolCall(0, "call_alpha_1", "get_alpha", "{}"),
+                        CreateToolCall(1, "call_beta_1", "get_beta", "{}"),
+                    ],
+                    finishReason: "tool_calls"),
+            ],
+            [
+                CreateChunk(
+                    toolCalls:
+                    [
+                        CreateToolCall(0, "call_alpha_2", "get_alpha", "{}"),
+                        CreateToolCall(1, "call_beta_2", "get_beta", "{}"),
+                    ],
+                    finishReason: "tool_calls"),
+            ]).AsIChatClient();
+
+        var updates = new List<ChatResponseUpdate>();
+        await foreach (var update in client.GetStreamingResponseAsync(
+            [new AiChatMessage(ChatRole.User, "Call both tools twice.")],
+            new ChatOptions
+            {
+                Tools =
+                [
+                    AIFunctionFactory.Create(() => "tool-alpha", "get_alpha", "Returns alpha."),
+                    AIFunctionFactory.Create(() => "tool-beta", "get_beta", "Returns beta."),
+                ],
+                AllowMultipleToolCalls = true,
+            }))
+        {
+            updates.Add(update);
+        }
+
+        Assert.Equal(2, RecordingStreamingChatClient.RecordedRequests.Count);
+        Assert.Equal(2, updates.Count(static update => update.Role == ChatRole.Tool));
+        var finalToolCallUpdate = updates.Last(static update => update.Contents.OfType<FunctionCallContent>().Any());
+        Assert.Equal(2, finalToolCallUpdate.Contents.OfType<FunctionCallContent>().Count());
+        Assert.All(finalToolCallUpdate.Contents.OfType<FunctionCallContent>(), static call => Assert.False(call.InformationalOnly));
     }
 
     [Fact]
@@ -625,6 +869,9 @@ public class DeepSeekAdapterTests
         return assistant;
     }
 
+    private static AITool CreateDeclaration(string name, string description, string jsonSchema)
+        => AIFunctionFactory.CreateDeclaration(name, description, JsonDocument.Parse(jsonSchema).RootElement);
+
     private static ChatCompletion CreateChunk(string? reasoning = null, string? content = null, IList<ToolCall>? toolCalls = null, string? finishReason = null)
     {
         return new ChatCompletion
@@ -733,6 +980,29 @@ public class DeepSeekAdapterTests
                     {
                         IncludeUsage = request.StreamOptions.IncludeUsage,
                     },
+                Tools = request.Tools?.Select(static tool =>
+                {
+                    var function = tool.Function;
+                    if (function is null)
+                    {
+                        return new ChatTool
+                        {
+                            Type = tool.Type,
+                        };
+                    }
+
+                    return new ChatTool
+                    {
+                        Type = tool.Type,
+                        Function = new ChatToolFunction
+                        {
+                            Name = function.Name,
+                            Description = function.Description,
+                            Strict = function.Strict,
+                            Parameters = function.Parameters?.DeepClone()!,
+                        },
+                    };
+                }).ToList(),
             };
         }
     }

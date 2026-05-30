@@ -10,8 +10,8 @@
 ## Installation
 
 ```bash
-dotnet add package DeepSeek.Core --version 1.0.0
-dotnet add package DeepSeek.Agents.AI --version 1.0.0
+dotnet add package DeepSeek.Core --version 1.0.1
+dotnet add package DeepSeek.Agents.AI --version 1.0.1
 ```
 
 The core NuGet package is named `DeepSeek.Core`, while the public namespaces remain `DeepSeek` and `DeepSeek.*`.

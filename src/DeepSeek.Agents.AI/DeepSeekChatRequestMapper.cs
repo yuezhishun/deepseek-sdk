@@ -1,13 +1,14 @@
+using DeepSeek.Chat;
+using Microsoft.Extensions.AI;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Microsoft.Extensions.AI;
+using System.Xml.Linq;
 using AiChatMessage = Microsoft.Extensions.AI.ChatMessage;
 using WireChatMessage = DeepSeek.Chat.ChatMessage;
 using WireChatTool = DeepSeek.Chat.ChatTool;
 using WireChatToolChoice = DeepSeek.Chat.ChatToolChoice;
 using WireChatToolChoiceFunction = DeepSeek.Chat.ChatToolChoiceFunction;
 using WireChatToolFunction = DeepSeek.Chat.ChatToolFunction;
-using DeepSeek.Chat;
 
 namespace DeepSeek.Agents.AI;
 
@@ -241,37 +242,49 @@ internal static class DeepSeekChatRequestMapper
             return null;
         }
 
-        return tools.Select(tool =>
+        return tools.Select(MapTool).ToList();
+    }
+
+    private static WireChatTool MapTool(AITool tool)
+    {
+        if (tool.GetService<DelegatingAIFunction>() is { } delegatingFunction)
         {
-            if (tool is DelegatingAIFunction delegatingFunction)
-            {
-                return new WireChatTool
-                {
-                    Function = new WireChatToolFunction
-                    {
-                        Name = delegatingFunction.Name,
-                        Description = delegatingFunction.Description,
-                        Parameters = JsonNode.Parse(delegatingFunction.JsonSchema.GetRawText()) ?? new JsonObject(),
-                        Strict = TryGetStrictValue(delegatingFunction.AdditionalProperties),
-                    },
-                };
-            }
+            return CreateWireChatTool(
+                delegatingFunction.Name,
+                delegatingFunction.Description,
+                delegatingFunction.JsonSchema.GetRawText(),
+                delegatingFunction.AdditionalProperties);
+        }
 
-            if (tool is AIFunction function)
-            {
-                return new WireChatTool
-                {
-                    Function = new WireChatToolFunction
-                    {
-                        Name = function.Name,
-                        Description = function.Description,
-                        Parameters = JsonNode.Parse(function.JsonSchema.GetRawText()) ?? new JsonObject(),
-                    },
-                };
-            }
+        if (tool.GetService<AIFunction>() is { } function)
+        {
+            return CreateWireChatTool(function.Name, function.Description, function.JsonSchema.GetRawText(), function.AdditionalProperties);
+        }
 
-            throw new NotSupportedException("Unsupported AITool type: " + tool.GetType().FullName);
-        }).ToList();
+        if (tool.GetService<AIFunctionDeclaration>() is { } declaration)
+        {
+            return CreateWireChatTool(declaration.Name, declaration.Description, declaration.JsonSchema.GetRawText(), declaration.AdditionalProperties);
+        }
+
+        throw new NotSupportedException("Unsupported AITool type: " + tool.GetType().FullName);
+    }
+
+    private static WireChatTool CreateWireChatTool(
+        string name,
+        string? description,
+        string jsonSchema,
+        IReadOnlyDictionary<string, object?>? additionalProperties = null)
+    {
+        return new WireChatTool
+        {
+            Function = new WireChatToolFunction
+            {
+                Name = name,
+                Description = description,
+                Parameters = JsonNode.Parse(jsonSchema) ?? new JsonObject(),
+                Strict = TryGetStrictValue(additionalProperties),
+            },
+        };
     }
 
     private static object? MapToolChoice(ChatOptions? options)

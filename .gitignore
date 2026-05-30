@@ -430,7 +430,18 @@ FodyWeavers.xsd
 *.msp
 
 # Local sample secrets
+sample/appsettings.json
+sample/DeepSeek.Agui.Agent/appsettings.json
 sample/DeepSeek.Sample/appsettings.json
+sample/AGUIDojoServer/appsettings.json
+
+# Local sample build outputs
+sample/AGUIDojoWeb/dist/
+sample/AGUIDojoWeb/test-results/
+sample/AGUIDojoWeb/*.tsbuildinfo
+sample/AGUIDojoWeb/**/*.js
+sample/AGUIDojoWeb/**/*.d.ts
+sample/TODO.md
 
 # Local development notes and process archive
 docs/

@@ -13,14 +13,13 @@ var loggerFactory = LoggerFactory.Create(builder =>
     builder.SetMinimumLevel(LogLevel.Trace);
     builder.AddFilter("System.ClientModel", LogLevel.Trace);
 
-    // 配置 Serilog，将日志写入文件
     Log.Logger = new LoggerConfiguration()
-        .MinimumLevel.Verbose() // 保留 SDK pipeline trace 日志
-        .WriteTo.File("D:/Download/agui-agent-llm-.log", // 文件路径，支持 rolling
-            rollingInterval: RollingInterval.Day, // 每天生成一个新文件
+        .MinimumLevel.Verbose() 
+        .WriteTo.File("D:/Download/agui-agent-llm-.log", 
+            rollingInterval: RollingInterval.Day, 
             outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
         .CreateLogger();
-    builder.AddSerilog(); // 将 Serilog 挂接到 ILoggerFactory
+    builder.AddSerilog(); 
 });
 builder.Services.AddAGUI();
 builder.Services.AddCors(options =>

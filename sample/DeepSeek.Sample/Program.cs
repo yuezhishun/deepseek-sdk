@@ -10,7 +10,7 @@ using System.ClientModel.Primitives;
 
 string FlashModel = "deepseek-v4-flash";
 
-// 从appsettings.json读取秘钥
+
 var builder = new ConfigurationBuilder()
     .SetBasePath(Directory.GetCurrentDirectory())
     .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
@@ -20,15 +20,15 @@ var loggerFactory = LoggerFactory.Create(builder =>
     builder.SetMinimumLevel(LogLevel.Trace);
     builder.AddFilter("System.ClientModel", LogLevel.Trace);
 
-    // 配置 Serilog，将日志写入文件
+
     Log.Logger = new LoggerConfiguration()
-        .MinimumLevel.Verbose() // 保留 SDK pipeline trace 日志
-        .WriteTo.File("D:/Download/agent-llm-.log", // 文件路径，支持 rolling
-            rollingInterval: RollingInterval.Day, // 每天生成一个新文件
+        .MinimumLevel.Verbose() 
+        .WriteTo.File("D:/Download/agent-llm-.log", 
+            rollingInterval: RollingInterval.Minute, 
             outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
         .CreateLogger();
-    //builder.AddConsole();
-    builder.AddSerilog(); // 将 Serilog 挂接到 ILoggerFactory
+
+    builder.AddSerilog(); 
 });
 var configuration = builder.Build();
 

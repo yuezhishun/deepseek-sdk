@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.37012.4 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AGUIDojoServer", "AGUIDojoServer.csproj", "{D157B4C1-7A9A-8F49-1720-D19106F89DB0}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{D157B4C1-7A9A-8F49-1720-D19106F89DB0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D157B4C1-7A9A-8F49-1720-D19106F89DB0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D157B4C1-7A9A-8F49-1720-D19106F89DB0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D157B4C1-7A9A-8F49-1720-D19106F89DB0}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {0A3ACA94-A950-4B0E-9314-6F1F24AEAD88}
+	EndGlobalSection
+EndGlobal
