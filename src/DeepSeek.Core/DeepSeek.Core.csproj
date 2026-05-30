@@ -6,16 +6,16 @@
     <LangVersion>latest</LangVersion>
     <Authors>Yue Zhishun</Authors>
     <Description>Typed DeepSeek SDK for .NET built on System.ClientModel.</Description>
-    <PackageReleaseNotes>Initial 1.0.0 release of the DeepSeek.Core typed SDK.</PackageReleaseNotes>
+    <PackageReleaseNotes>1.0.1 maintenance release with adapter, sample, and release workflow updates.</PackageReleaseNotes>
     <PackageProjectUrl>https://github.com/yuezhishun/deepseek-sdk</PackageProjectUrl>
     <RepositoryUrl>https://github.com/yuezhishun/deepseek-sdk</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>LLM,AI,DeepSeek,System.ClientModel,API,SDK,Chat,Completions,.NETStandard</PackageTags>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <FileVersion>1.0.0.0</FileVersion>
+    <AssemblyVersion>1.0.1.0</AssemblyVersion>
+    <FileVersion>1.0.1.0</FileVersion>
     <PackageIcon>logo.png</PackageIcon>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <PackageId>DeepSeek.Core</PackageId>
     <AssemblyName>DeepSeek.Core</AssemblyName>
     <RootNamespace>DeepSeek</RootNamespace>

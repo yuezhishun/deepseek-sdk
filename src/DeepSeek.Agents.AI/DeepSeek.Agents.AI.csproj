@@ -7,16 +7,16 @@
     <Authors>Yue Zhishun</Authors>
     <Company>Yue Zhishun</Company>
     <Description>Agent Framework and Microsoft.Extensions.AI adapter for the DeepSeek typed client.</Description>
-    <PackageReleaseNotes>Initial 1.0.0 release of the DeepSeek.Agents.AI adapter.</PackageReleaseNotes>
+    <PackageReleaseNotes>1.0.1 maintenance release with adapter, sample, and release workflow updates.</PackageReleaseNotes>
     <PackageProjectUrl>https://github.com/yuezhishun/deepseek-sdk</PackageProjectUrl>
     <RepositoryUrl>https://github.com/yuezhishun/deepseek-sdk</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>LLM,AI,DeepSeek,Microsoft.Extensions.AI,Microsoft.Agents.AI,.NETStandard</PackageTags>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <FileVersion>1.0.0.0</FileVersion>
+    <AssemblyVersion>1.0.1.0</AssemblyVersion>
+    <FileVersion>1.0.1.0</FileVersion>
     <PackageIcon>logo.png</PackageIcon>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <PackageId>DeepSeek.Agents.AI</PackageId>
     <AssemblyName>DeepSeek.Agents.AI</AssemblyName>
     <RootNamespace>DeepSeek.Agents.AI</RootNamespace>

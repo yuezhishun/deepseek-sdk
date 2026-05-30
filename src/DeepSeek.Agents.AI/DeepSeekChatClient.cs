@@ -9,6 +9,8 @@ namespace DeepSeek.Agents.AI;
 
 public sealed class DeepSeekChatClient : IChatClient
 {
+    private const int MaxStreamingToolContinuationTurns = 2;
+
     private readonly ChatClient _client;
     private readonly ChatOptions? _defaults;
 
@@ -50,6 +52,8 @@ public sealed class DeepSeekChatClient : IChatClient
     {
         var merged = MergeOptions(options);
         var conversation = messages.ToList();
+        var automaticContinuationTurns = 0;
+        var continuedToolCallRounds = new HashSet<string>(StringComparer.Ordinal);
 
         while (true)
         {
@@ -122,11 +126,14 @@ public sealed class DeepSeekChatClient : IChatClient
                 yield break;
             }
 
-            if (toolCalls.Count > 1 &&
-                ShouldHandleStreamingToolContinuation(merged) &&
+            var toolCallRoundSignature = CreateToolCallRoundSignature(toolCalls);
+            if (ShouldHandleStreamingToolContinuation(merged, toolCalls, automaticContinuationTurns, toolCallRoundSignature, continuedToolCallRounds) &&
                 await TryInvokeAllToolsAsync(merged?.Tools, toolCalls, cancellationToken).ConfigureAwait(false) is { } toolResults)
             {
-                foreach (var toolUpdate in turnState.CreateToolCallUpdates(lastChunk, messageId, toolCalls, informationalOnly: true))
+                automaticContinuationTurns++;
+                continuedToolCallRounds.Add(toolCallRoundSignature);
+
+                if (turnState.CreateToolCallUpdate(lastChunk, messageId, toolCalls, informationalOnly: true) is { } toolUpdate)
                 {
                     yield return toolUpdate;
                 }
@@ -145,9 +152,9 @@ public sealed class DeepSeekChatClient : IChatClient
                 continue;
             }
 
-            foreach (var toolUpdate in turnState.CreateToolCallUpdates(lastChunk, messageId, toolCalls, informationalOnly: false))
+            if (turnState.CreateToolCallUpdate(lastChunk, messageId, toolCalls, informationalOnly: false) is { } finalToolUpdate)
             {
-                yield return toolUpdate;
+                yield return finalToolUpdate;
             }
 
             yield break;
@@ -158,8 +165,87 @@ public sealed class DeepSeekChatClient : IChatClient
     {
     }
 
-    private static bool ShouldHandleStreamingToolContinuation(ChatOptions? options)
-        => !(options?.AdditionalProperties?.TryGetValue(DeepSeekChatRequestMapper.DisableStreamingToolContinuationKey, out var value) == true && value is true);
+    private static bool ShouldHandleStreamingToolContinuation(
+        ChatOptions? options,
+        IReadOnlyList<FunctionCallContent> toolCalls,
+        int automaticContinuationTurns,
+        string toolCallRoundSignature,
+        HashSet<string> continuedToolCallRounds)
+        => !(options?.AdditionalProperties?.TryGetValue(DeepSeekChatRequestMapper.DisableStreamingToolContinuationKey, out var value) == true && value is true)
+           && toolCalls.Count > 1
+           && automaticContinuationTurns < MaxStreamingToolContinuationTurns
+           && !continuedToolCallRounds.Contains(toolCallRoundSignature);
+
+    private static string CreateToolCallRoundSignature(IReadOnlyList<FunctionCallContent> toolCalls)
+    {
+        var builder = new StringBuilder();
+        foreach (var toolCall in toolCalls)
+        {
+            builder.Append(toolCall.Name);
+            builder.Append('(');
+
+            if (toolCall.Arguments is not null)
+            {
+                foreach (var argument in toolCall.Arguments.OrderBy(static pair => pair.Key, StringComparer.Ordinal))
+                {
+                    builder.Append(argument.Key);
+                    builder.Append('=');
+                    AppendCanonicalValue(builder, argument.Value);
+                    builder.Append(';');
+                }
+            }
+
+            builder.Append(')');
+            builder.Append('|');
+        }
+
+        return builder.ToString();
+    }
+
+    private static void AppendCanonicalValue(StringBuilder builder, object? value)
+    {
+        value = NormalizeArgumentValue(value);
+
+        switch (value)
+        {
+            case null:
+                builder.Append("null");
+                break;
+            case string text:
+                builder.Append('"');
+                builder.Append(text.Replace("\"", "\\\""));
+                builder.Append('"');
+                break;
+            case bool boolean:
+                builder.Append(boolean ? "true" : "false");
+                break;
+            case IDictionary<string, object?> dictionary:
+                builder.Append('{');
+                foreach (var pair in dictionary.OrderBy(static pair => pair.Key, StringComparer.Ordinal))
+                {
+                    builder.Append(pair.Key);
+                    builder.Append(':');
+                    AppendCanonicalValue(builder, pair.Value);
+                    builder.Append(';');
+                }
+
+                builder.Append('}');
+                break;
+            case System.Collections.IEnumerable sequence when value is not byte[]:
+                builder.Append('[');
+                foreach (var item in sequence)
+                {
+                    AppendCanonicalValue(builder, item);
+                    builder.Append(',');
+                }
+
+                builder.Append(']');
+                break;
+            default:
+                builder.Append(value);
+                break;
+        }
+    }
 
     private static async Task<List<FunctionResultContent>?> TryInvokeAllToolsAsync(
         IList<AITool>? tools,
@@ -171,7 +257,16 @@ public sealed class DeepSeekChatClient : IChatClient
             return null;
         }
 
-        var functionLookup = tools.OfType<AIFunction>().ToDictionary(static tool => tool.Name, StringComparer.Ordinal);
+        var functionLookup = tools
+            .Select(static tool => tool.GetService<AIFunction>())
+            .OfType<AIFunction>()
+            .ToDictionary(static tool => tool.Name, StringComparer.Ordinal);
+
+        if (functionLookup.Count == 0)
+        {
+            return null;
+        }
+
         var results = new List<FunctionResultContent>(toolCalls.Count);
         foreach (var toolCall in toolCalls)
         {
@@ -203,6 +298,7 @@ public sealed class DeepSeekChatClient : IChatClient
             JsonValueKind.Object => element.EnumerateObject().ToDictionary(static p => p.Name, static p => NormalizeJsonElement(p.Value)),
             JsonValueKind.Array => element.EnumerateArray().Select(NormalizeJsonElement).ToList(),
             JsonValueKind.String => element.GetString(),
+            JsonValueKind.Number when element.TryGetInt32(out var i32) => i32,
             JsonValueKind.Number when element.TryGetInt64(out var i64) => i64,
             JsonValueKind.Number when element.TryGetDecimal(out var dec) => dec,
             JsonValueKind.Number => element.GetDouble(),
@@ -293,7 +389,7 @@ public sealed class DeepSeekChatClient : IChatClient
             return assistant;
         }
 
-        public IReadOnlyList<ChatResponseUpdate> CreateToolCallUpdates(
+        public ChatResponseUpdate? CreateToolCallUpdate(
             ChatCompletion? chunk,
             string messageId,
             IReadOnlyList<FunctionCallContent> toolCalls,
@@ -301,36 +397,34 @@ public sealed class DeepSeekChatClient : IChatClient
         {
             if (toolCalls.Count == 0)
             {
-                return [];
+                return null;
             }
 
-            var updates = new List<ChatResponseUpdate>(toolCalls.Count);
-            for (var i = 0; i < toolCalls.Count; i++)
+            List<AIContent> contents = [];
+            foreach (var toolCall in toolCalls)
             {
-                var functionCall = new FunctionCallContent(toolCalls[i].CallId, toolCalls[i].Name, toolCalls[i].Arguments)
+                contents.Add(new FunctionCallContent(toolCall.CallId, toolCall.Name, toolCall.Arguments)
                 {
                     InformationalOnly = informationalOnly,
-                };
+                });
+            }
 
-                var update = new ChatResponseUpdate(ChatRole.Assistant, [functionCall])
+            var update = new ChatResponseUpdate(ChatRole.Assistant, contents)
+            {
+                RawRepresentation = chunk,
+                MessageId = messageId,
+            };
+
+            if (_reasoning.Length > 0)
+            {
+                update.AdditionalProperties = new AdditionalPropertiesDictionary
                 {
-                    RawRepresentation = chunk,
-                    MessageId = messageId,
+                    ["reasoning_content"] = _reasoning.ToString(),
                 };
-
-                if (i == toolCalls.Count - 1 && _reasoning.Length > 0)
-                {
-                    update.AdditionalProperties = new AdditionalPropertiesDictionary
-                    {
-                        ["reasoning_content"] = _reasoning.ToString(),
-                    };
-                }
-
-                updates.Add(update);
             }
 
             _toolCallStates.Clear();
-            return updates;
+            return update;
         }
     }
 

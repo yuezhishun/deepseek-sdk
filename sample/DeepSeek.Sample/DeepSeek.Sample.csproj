@@ -18,7 +18,7 @@
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
   </ItemGroup>
   <ItemGroup>
-	<Content Include="..\appsettings.json" Link="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+	<Content Include="..\appsettings.dev.json" Link="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\DeepSeek.Core\DeepSeek.Core.csproj" />

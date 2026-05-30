@@ -24,7 +24,7 @@
   <ItemGroup>
     <Compile Include="..\DeepSeekTestModels.cs" Link="DeepSeekTestModels.cs" />
     <Compile Include="..\TestApiKeyProvider.cs" Link="TestApiKeyProvider.cs" />
-    <Content Include="..\..\sample\appsettings.json" Link="appsettings.json" CopyToOutputDirectory="PreserveNewest" />	  
+    <Content Include="..\..\sample\appsettings.dev.json" Link="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
