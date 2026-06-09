@@ -34,3 +34,9 @@ Console.WriteLine(response.Text);
 - `AsIChatClient(...)` extension methods for DeepSeek chat clients
 - `ChatOptions` mapping for model options, tools, streaming, and reasoning
 - Agent Framework integration helpers for DeepSeek-backed agents
+
+## JSON Output
+
+DeepSeek currently exposes JSON Output through `response_format: { "type": "json_object" }`.
+
+When you set `ChatOptions.ResponseFormat` to `ChatResponseFormat.Json` or `ChatResponseFormat.ForJsonSchema<T>()`, this provider sends `json_object` on the wire and augments the system prompt with json/schema guidance for DeepSeek models. `ForJsonSchema<T>()` should be treated as prompt augmentation, not native server-side schema enforcement.
