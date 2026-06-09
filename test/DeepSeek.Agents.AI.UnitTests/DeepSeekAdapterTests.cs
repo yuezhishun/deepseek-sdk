@@ -112,6 +112,103 @@ public class DeepSeekAdapterTests
     }
 
     [Fact]
+    public async Task AsIChatClient_MapsJsonResponseFormatToJsonObjectAndAppendsJsonInstructions()
+    {
+        var client = new RecordingResponseChatClient(new ChatCompletion
+        {
+            Choices =
+            [
+                new ChatChoice
+                {
+                    Message = new WireChatMessage
+                    {
+                        Role = "assistant",
+                        Content = """{"ok":true}""",
+                    },
+                    FinishReason = "stop",
+                },
+            ],
+        }).AsIChatClient();
+
+        await client.GetResponseAsync(
+            [new AiChatMessage(ChatRole.User, "Return a machine-readable answer.")],
+            new ChatOptions
+            {
+                Instructions = "Keep the answer concise.",
+                ResponseFormat = ChatResponseFormat.Json,
+            });
+
+        var request = Assert.Single(RecordingResponseChatClient.RecordedRequests);
+        Assert.Equal(ChatResponseFormatTypes.JsonObject, request.ResponseFormat?.Type);
+
+        var systemMessage = Assert.Single(request.Messages, static message => message.Role == "system");
+        Assert.Contains("Keep the answer concise.", systemMessage.Content, StringComparison.Ordinal);
+        Assert.Contains("valid json", systemMessage.Content, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("single JSON object", systemMessage.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("EXAMPLE INPUT:", systemMessage.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("JSON OUTPUT:", systemMessage.Content, StringComparison.Ordinal);
+        Assert.True(systemMessage.Content!.IndexOf("Keep the answer concise.", StringComparison.Ordinal)
+            < systemMessage.Content.IndexOf("You must reply with valid json.", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AsIChatClient_MapsJsonSchemaResponseFormatToJsonObjectAndEmbedsSchemaGuidance()
+    {
+        var client = new RecordingResponseChatClient(new ChatCompletion
+        {
+            Choices =
+            [
+                new ChatChoice
+                {
+                    Message = new WireChatMessage
+                    {
+                        Role = "assistant",
+                        Content = """{"assistantMessage":"done","state":{"stage":"收集需求中"}}""",
+                    },
+                    FinishReason = "stop",
+                },
+            ],
+        }).AsIChatClient();
+
+        await client.GetResponseAsync(
+            [new AiChatMessage(ChatRole.User, "Summarize the leasing state.")],
+            new ChatOptions
+            {
+                Instructions = "Use only the provided facts.",
+                ResponseFormat = ChatResponseFormat.ForJsonSchema<StructuredLeasingSnapshot>(
+                    schemaName: "leasing_snapshot",
+                    schemaDescription: "Complete leasing state and the next reply."),
+            });
+
+        var request = Assert.Single(RecordingResponseChatClient.RecordedRequests);
+        Assert.Equal(ChatResponseFormatTypes.JsonObject, request.ResponseFormat?.Type);
+
+        var systemMessage = Assert.Single(request.Messages, static message => message.Role == "system");
+        Assert.Contains("Use only the provided facts.", systemMessage.Content, StringComparison.Ordinal);
+        Assert.Contains("你必须严格只输出一个合法的 JSON 实例", systemMessage.Content, StringComparison.Ordinal);
+        Assert.Contains("根据它生成一个符合该模式的数据实例", systemMessage.Content, StringComparison.Ordinal);
+        Assert.Contains("以 { 开始", systemMessage.Content, StringComparison.Ordinal);
+        Assert.Contains("以 [ 开始", systemMessage.Content, StringComparison.Ordinal);
+        Assert.Contains("\"type\":\"object\"", systemMessage.Content, StringComparison.Ordinal);
+        Assert.Contains("\"assistantMessage\"", systemMessage.Content, StringComparison.Ordinal);
+        Assert.Contains("\"state\"", systemMessage.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("{\r\n", systemMessage.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("\\u0022", systemMessage.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("EXAMPLE INPUT:", systemMessage.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("EXAMPLE JSON OUTPUT:", systemMessage.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("JSON OUTPUT:", systemMessage.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("Which is the highest mountain in the world? Mount Everest.", systemMessage.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("""{"question":"Which is the highest mountain in the world?","answer":"Mount Everest"}""", systemMessage.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("You must reply with valid json.", systemMessage.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("Return only a single JSON object.", systemMessage.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("Do not wrap the response in Markdown fences.", systemMessage.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("Do not add explanatory text before or after the json object.", systemMessage.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("Schema name:", systemMessage.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("Schema description:", systemMessage.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("Follow this guidance exactly", systemMessage.Content, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task AsAIAgent_PreservesSequentialToolHistoryAcrossStreamingRounds()
     {
         var firstServiceCallChunks = new[]
@@ -973,6 +1070,12 @@ public class DeepSeekAdapterTests
                         },
                     }).ToList(),
                 }).ToList(),
+                ResponseFormat = request.ResponseFormat is null
+                    ? null
+                    : new ResponseFormat
+                    {
+                        Type = request.ResponseFormat.Type,
+                    },
                 Stream = request.Stream,
                 StreamOptions = request.StreamOptions is null
                     ? null
@@ -1024,6 +1127,20 @@ public class DeepSeekAdapterTests
             RecordedRequests.Add(RecordingStreamingChatClient.Clone(request));
             return Task.FromResult(ClientResult.FromValue(_response, new FakePipelineResponse()));
         }
+    }
+
+    private sealed class StructuredLeasingSnapshot
+    {
+        public StructuredLeasingState State { get; set; } = new();
+
+        public string AssistantMessage { get; set; } = string.Empty;
+    }
+
+    private sealed class StructuredLeasingState
+    {
+        public string Stage { get; set; } = string.Empty;
+
+        public string? FloorPlanType { get; set; }
     }
 
     private sealed class InlineAsyncCollectionResult<T> : AsyncCollectionResult<T>

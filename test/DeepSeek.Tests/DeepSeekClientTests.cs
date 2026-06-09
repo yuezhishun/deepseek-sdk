@@ -51,6 +51,35 @@ public class DeepSeekClientTests
     }
 
     [Fact]
+    public async Task ChatClient_RequestBody_UsesRelaxedJsonEscapingForEmbeddedJsonAndUnicode()
+    {
+        var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"ok\"}}]}", Encoding.UTF8, "application/json"),
+        });
+        var client = CreateChatClient(handler);
+
+        await client.CompleteChatAsync(new ChatCompletionRequest
+        {
+            Messages =
+            [
+                new ChatMessage
+                {
+                    Role = "user",
+                    Content = "请按这个 JSON 返回：{\"question\":\"今天天气\",\"answer\":\"晴天😀\"}",
+                },
+            ],
+        });
+
+        var body = Assert.IsType<string>(handler.LastRequestBody);
+        Assert.DoesNotContain("\\u0022question\\u0022", body, StringComparison.Ordinal);
+        Assert.Contains("\\\"question\\\":\\\"今天天气\\\"", body, StringComparison.Ordinal);
+        Assert.Contains("请按这个 JSON 返回", body, StringComparison.Ordinal);
+        Assert.Contains("今天天气", body, StringComparison.Ordinal);
+        Assert.Contains("晴天", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ChatClient_MapsErrorToDeepSeekException()
     {
         var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.BadRequest)

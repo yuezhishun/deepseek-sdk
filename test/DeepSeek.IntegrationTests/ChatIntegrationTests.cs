@@ -1,5 +1,6 @@
 using System.ClientModel.Primitives;
 using System.Globalization;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using DeepSeek.Anthropic;
 using DeepSeek.Chat;
@@ -238,6 +239,75 @@ public class ChatIntegrationTests : IClassFixture<DeepSeekIntegrationFixture>
     }
 
     [Fact]
+    public async Task OpenAI_Adapter_JsonSchemaResponse_ReturnsJsonObject_Live()
+    {
+        if (!IntegrationTestGuard.RequireConfigured(_fixture)) { return; }
+
+        var response = await _fixture.OpenAiChatClient.GetResponseAsync(
+            [new Microsoft.Extensions.AI.ChatMessage(Microsoft.Extensions.AI.ChatRole.User, "Create a leasing snapshot for a renter who wants a studio next month. Reply only with the JSON object.")],
+            new ChatOptions
+            {
+                ModelId = DeepSeekTestModels.FlashModel,
+                Temperature = 0,
+                ResponseFormat = ChatResponseFormat.ForJsonSchema<StructuredJsonEvidenceResponse>(
+                    schemaName: "StructuredJsonEvidenceResponse",
+                    schemaDescription: "A minimal leasing snapshot used to prove the DeepSeek adapter returned a JSON object."),
+            },
+            _fixture.CreateToken());
+
+        var assistant = Assert.Single(response.Messages);
+        string text = assistant.Text ?? response.Text ?? string.Empty;
+
+        Assert.False(string.IsNullOrWhiteSpace(text));
+
+        using JsonDocument document = JsonDocument.Parse(text);
+        Assert.Equal(JsonValueKind.Object, document.RootElement.ValueKind);
+
+        JsonElement assistantMessage = document.RootElement.GetProperty("assistantMessage");
+        Assert.Equal(JsonValueKind.String, assistantMessage.ValueKind);
+        Assert.False(string.IsNullOrWhiteSpace(assistantMessage.GetString()));
+
+        JsonElement state = document.RootElement.GetProperty("state");
+        Assert.Equal(JsonValueKind.Object, state.ValueKind);
+
+        JsonElement stage = state.GetProperty("stage");
+        Assert.Equal(JsonValueKind.String, stage.ValueKind);
+        Assert.False(string.IsNullOrWhiteSpace(stage.GetString()));
+    }
+
+    [Fact]
+    public async Task OpenAI_Adapter_JsonObjectResponse_ReturnsParsableJsonObject_Live()
+    {
+        if (!IntegrationTestGuard.RequireConfigured(_fixture)) { return; }
+
+        var response = await _fixture.OpenAiChatClient.GetResponseAsync(
+            [new Microsoft.Extensions.AI.ChatMessage(Microsoft.Extensions.AI.ChatRole.User, "Return exactly one JSON object with properties answer and evidence. Set answer to json-object-ok and evidence to deepseek-json-proof.")],
+            new ChatOptions
+            {
+                ModelId = DeepSeekTestModels.FlashModel,
+                Temperature = 0,
+                ResponseFormat = ChatResponseFormat.Json,
+            },
+            _fixture.CreateToken());
+
+        var assistant = Assert.Single(response.Messages);
+        string text = assistant.Text ?? response.Text ?? string.Empty;
+
+        Assert.False(string.IsNullOrWhiteSpace(text));
+
+        using JsonDocument document = JsonDocument.Parse(text);
+        Assert.Equal(JsonValueKind.Object, document.RootElement.ValueKind);
+
+        JsonElement answer = document.RootElement.GetProperty("answer");
+        Assert.Equal(JsonValueKind.String, answer.ValueKind);
+        Assert.Equal("json-object-ok", answer.GetString());
+
+        JsonElement evidence = document.RootElement.GetProperty("evidence");
+        Assert.Equal(JsonValueKind.String, evidence.ValueKind);
+        Assert.Equal("deepseek-json-proof", evidence.GetString());
+    }
+
+    [Fact]
     public async Task Anthropic_Adapter_ReasoningAndToolMapping_Live()
     {
         if (!IntegrationTestGuard.RequireConfigured(_fixture)) { return; }
@@ -401,5 +471,17 @@ public class ChatIntegrationTests : IClassFixture<DeepSeekIntegrationFixture>
 
     private static string NormalizeExactText(string? text)
         => text?.Trim().Trim('"') ?? string.Empty;
+}
+
+public sealed class StructuredJsonEvidenceResponse
+{
+    public StructuredJsonEvidenceState State { get; set; } = new();
+
+    public string AssistantMessage { get; set; } = string.Empty;
+}
+
+public sealed class StructuredJsonEvidenceState
+{
+    public string Stage { get; set; } = string.Empty;
 }
 #pragma warning restore MAAI001
