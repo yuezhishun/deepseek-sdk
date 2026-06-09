@@ -1,24 +1,14 @@
 <script setup lang="ts">
-import { computed } from "vue";
 import {
   CopilotChat,
+  CopilotChatAssistantMessage,
   CopilotChatMessageView,
   useAgent,
   useConfigureSuggestions,
-  UseAgentUpdate,
 } from "@copilotkit/vue/v2";
-import TaskProgress, { type TaskProgressStep } from "@/components/task-progress/TaskProgress.vue";
+import AgenticPlanMessageAfter from "@/components/features/AgenticPlanMessageAfter.vue";
 import { AGENT_IDS } from "@/lib/agui";
-
-interface AgentState {
-  steps: TaskProgressStep[];
-}
-
-const { agent } = useAgent({
-  agentId: AGENT_IDS.agenticGenerativeUi,
-  updates: [UseAgentUpdate.OnStateChanged],
-});
-const steps = computed(() => ((agent.value?.state as AgentState | undefined)?.steps ?? []));
+import { getPlanStateFromStateEvent, shouldHidePlanSummaryMessage } from "@/lib/agenticPlan";
 
 useConfigureSuggestions({
   suggestions: [
@@ -27,6 +17,39 @@ useConfigureSuggestions({
   ],
   available: "always",
 });
+
+const { agent } = useAgent({
+  agentId: AGENT_IDS.agenticGenerativeUi,
+});
+
+function hasVisiblePlanState(): boolean {
+  return (getPlanStateFromStateEvent(agent.value?.state)?.steps.length ?? 0) > 0;
+}
+
+function getLastUserMessageIndex(messages: readonly unknown[]): number {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const candidate = messages[index] as { role?: unknown } | undefined;
+    if (candidate?.role === "user") {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+function shouldHideAssistantMessage(message: unknown, messages: readonly unknown[]): boolean {
+  if (!hasVisiblePlanState()) {
+    return false;
+  }
+
+  const lastUserMessageIndex = getLastUserMessageIndex(messages);
+  const messageIndex = messages.findIndex((candidate) => candidate === message);
+  if (messageIndex === -1 || messageIndex <= lastUserMessageIndex) {
+    return false;
+  }
+
+  return shouldHidePlanSummaryMessage(message, true);
+}
 </script>
 
 <template>
@@ -35,10 +58,28 @@ useConfigureSuggestions({
       <CopilotChat :agent-id="AGENT_IDS.agenticGenerativeUi" class="mx-auto h-full max-w-6xl rounded-2xl">
         <template #message-view="{ messages, isRunning }">
           <div data-testid="copilot-message-list" class="flex min-h-0 flex-1 flex-col">
-            <CopilotChatMessageView :messages="messages" :is-running="isRunning" />
-            <div v-if="steps.length > 0" class="my-4">
-              <TaskProgress :steps="steps" />
-            </div>
+            <CopilotChatMessageView :messages="messages" :is-running="isRunning">
+              <template #assistant-message="{ message, messages: slotMessages, isRunning: slotIsRunning }">
+                <CopilotChatAssistantMessage
+                  v-if="!shouldHideAssistantMessage(message, slotMessages)"
+                  :message="message"
+                  :messages="slotMessages"
+                  :is-running="slotIsRunning"
+                />
+              </template>
+              <template
+                #message-after="{ messageIndex, stateSnapshot, messageIndexInRun, numberOfMessagesInRun, runId }"
+              >
+                <AgenticPlanMessageAfter
+                  v-if="messageIndex === messages.length - 1"
+                  :is-last-message="true"
+                  :state-snapshot="stateSnapshot"
+                  :message-index-in-run="messageIndexInRun"
+                  :number-of-messages-in-run="numberOfMessagesInRun"
+                  :run-id="runId"
+                />
+              </template>
+            </CopilotChatMessageView>
           </div>
         </template>
       </CopilotChat>
