@@ -56,14 +56,40 @@ jobs:
       - name: Resolve package version
         shell: pwsh
         run: |
-          $version = "${{ github.ref_name }}"
+          $ref = "${{ github.ref }}"
+          $refName = "${{ github.ref_name }}"
+
+          if (-not $ref.StartsWith("refs/tags/v")) {
+            throw "NuGet publish must be run from a version tag like 'v1.0.2'. Current ref: '$ref' (ref_name: '$refName')."
+          }
+
+          $version = $refName
           if ($version.StartsWith("v")) {
             $version = $version.Substring(1)
           }
           if ([string]::IsNullOrWhiteSpace($version)) {
-            throw "Unable to resolve package version from ref '${{ github.ref_name }}'."
+            throw "Unable to resolve package version from ref '$ref' (ref_name: '$refName')."
           }
+          Write-Host "Resolved package version: $version"
           "PACKAGE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Validate package files
+        shell: pwsh
+        run: |
+          $corePackage = Join-Path $env:PACKAGE_OUTPUT "DeepSeek.Core.$env:PACKAGE_VERSION.nupkg"
+          $agentsPackage = Join-Path $env:PACKAGE_OUTPUT "DeepSeek.Agents.AI.$env:PACKAGE_VERSION.nupkg"
+
+          if (-not (Test-Path $corePackage)) {
+            throw "Package file not found: $corePackage"
+          }
+
+          if (-not (Test-Path $agentsPackage)) {
+            throw "Package file not found: $agentsPackage"
+          }
+
+          Write-Host "Validated package files:"
+          Write-Host " - $corePackage"
+          Write-Host " - $agentsPackage"
 
       - name: Publish DeepSeek.Core
         shell: pwsh
