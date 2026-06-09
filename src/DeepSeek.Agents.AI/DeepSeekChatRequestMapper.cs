@@ -1,8 +1,9 @@
 using DeepSeek.Chat;
 using Microsoft.Extensions.AI;
+using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Xml.Linq;
 using AiChatMessage = Microsoft.Extensions.AI.ChatMessage;
 using WireChatMessage = DeepSeek.Chat.ChatMessage;
 using WireChatTool = DeepSeek.Chat.ChatTool;
@@ -15,6 +16,27 @@ namespace DeepSeek.Agents.AI;
 internal static class DeepSeekChatRequestMapper
 {
     internal const string DisableStreamingToolContinuationKey = "deepseek_internal_disable_streaming_tool_continuation";
+    private const string JsonPrompt = 
+@"你必须严格只输出一个合法的 JSON 实例，不要有任何额外的文字说明、标记、前缀或后缀。
+不要使用 Markdown 代码块（如 ```json）包裹。
+响应体必须以 JSON 的第一个字符（{ 或 [）开始，以最后一个字符（} 或 ]）结束。
+JSON 必须语法完全正确：所有键用双引号，不允许尾随逗号，不允许注释，所有双引号、反斜杠和控制字符必须正确转义。
+如果内部需要表示 JSON 字符串，必须使用转义后的双引号。
+
+重要：下面提供了一个 JSON Schema，你必须根据它生成一个符合该模式的数据实例，而不是输出 Schema 本身。
+如果 Schema 的 ""type"" 是 ""object""，就输出一个 JSON 对象（以 { 开始）；如果是 ""array""，就输出一个 JSON 数组（以 [ 开始）。
+
+示例（仅用于说明模式与实例的关系）：
+Schema:
+{""$schema"":""https://json-schema.org/draft/2020-12/schema"",""type"":""object"",""properties"":{""name"":{""type"":""string""},""age"":{""type"":""integer""}}}
+对应的正确输出：
+{""name"":""Alice"",""age"":30}
+
+现在，请根据以下 JSON Schema 以及对话上下文生成所需的数据实例：";
+    private static readonly JsonSerializerOptions CompactJsonSerializerOptions = new()
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
 
     internal static ChatOptions MergeChatOptions(ChatOptions? defaults, ChatOptions? overrides)
     {
@@ -74,16 +96,17 @@ internal static class DeepSeekChatRequestMapper
 
     internal static ChatCompletionRequest MapToChatRequest(IEnumerable<AiChatMessage> messages, ChatOptions? options, bool stream)
     {
+        var jsonResponseFormat = options?.ResponseFormat as ChatResponseFormatJson;
         var request = new ChatCompletionRequest
         {
             Temperature = options?.Temperature,
             TopP = options?.TopP,
             MaxTokens = options?.MaxOutputTokens,
-            ResponseFormat = options?.ResponseFormat == ChatResponseFormat.Json ? new ResponseFormat { Type = ChatResponseFormatTypes.JsonObject } : null,
+            ResponseFormat = jsonResponseFormat is not null ? new ResponseFormat { Type = ChatResponseFormatTypes.JsonObject } : null,
             Stop = options?.StopSequences?.ToList(),
         };
 
-        var instructions = options?.Instructions;
+        var instructions = BuildInstructions(options?.Instructions, jsonResponseFormat);
         if (!string.IsNullOrWhiteSpace(instructions))
         {
             request.Messages.Add(new WireChatMessage { Role = "system", Content = instructions });
@@ -111,6 +134,50 @@ internal static class DeepSeekChatRequestMapper
         }
 
         return request;
+    }
+
+    private static string? BuildInstructions(string? instructions, ChatResponseFormatJson? responseFormat)
+    {
+        var augmentation = BuildJsonResponseFormatInstructions(responseFormat);
+        if (string.IsNullOrWhiteSpace(augmentation))
+        {
+            return instructions;
+        }
+
+        if (string.IsNullOrWhiteSpace(instructions))
+        {
+            return augmentation;
+        }
+
+        return (instructions ?? string.Empty).TrimEnd() + Environment.NewLine + Environment.NewLine + augmentation;
+    }
+
+    private static string? BuildJsonResponseFormatInstructions(ChatResponseFormatJson? responseFormat)
+    {
+        if (responseFormat is null)
+        {
+            return null;
+        }
+
+        JsonElement? responseSchema = responseFormat.Schema;
+        var hasSchema = responseSchema is JsonElement presentSchema && presentSchema.ValueKind != JsonValueKind.Undefined;
+
+        if (!hasSchema)
+        {
+            return """
+                You must reply with valid json.
+                Return only a single JSON object.
+                Do not wrap the response in Markdown fences.
+                Do not add explanatory text before or after the json object.
+                """;
+        }
+
+        JsonElement schemaElement = responseSchema!.Value;
+        return new StringBuilder()
+            .AppendLine(JsonPrompt)
+            .AppendLine(SerializeCompactJson(schemaElement))
+            .ToString()
+            .TrimEnd();
     }
 
     internal static ChatResponse MapToChatResponse(ChatCompletion response)
@@ -397,4 +464,7 @@ internal static class DeepSeekChatRequestMapper
             _ => JsonSerializer.Serialize(result),
         };
     }
+
+    private static string SerializeCompactJson(JsonElement json)
+        => JsonSerializer.Serialize(json, CompactJsonSerializerOptions);
 }
