@@ -6,6 +6,7 @@ public class DeepSeekClientOptions : ClientPipelineOptions
 {
     private Uri? _endpoint;
     private string? _userAgentApplicationId;
+    private bool _allowMessageContentLogging;
 
     public Uri Endpoint
     {
@@ -27,6 +28,20 @@ public class DeepSeekClientOptions : ClientPipelineOptions
         }
     }
 
+    /// <summary>
+    /// Explicitly opts the SDK into request/response body logging.
+    /// This is disabled by default so streaming responses remain single-consumption-safe.
+    /// </summary>
+    public bool AllowMessageContentLogging
+    {
+        get => _allowMessageContentLogging;
+        set
+        {
+            AssertNotFrozen();
+            _allowMessageContentLogging = value;
+        }
+    }
+
     internal DeepSeekClientOptions CloneAndFreeze(
         bool disableMessageLogging = false,
         bool disableMessageContentLogging = false,
@@ -36,13 +51,14 @@ public class DeepSeekClientOptions : ClientPipelineOptions
         {
             Endpoint = Endpoint,
             UserAgentApplicationId = UserAgentApplicationId,
+            AllowMessageContentLogging = AllowMessageContentLogging,
             Transport = Transport,
             RetryPolicy = RetryPolicy,
             MessageLoggingPolicy = messageLoggingPolicyOverride ?? (disableMessageLogging || disableMessageContentLogging ? null : MessageLoggingPolicy),
             ClientLoggingOptions = CloneClientLoggingOptions(
                 ClientLoggingOptions,
                 disableMessageLogging,
-                disableMessageContentLogging),
+                disableMessageContentLogging || !AllowMessageContentLogging),
             NetworkTimeout = NetworkTimeout,
             EnableDistributedTracing = EnableDistributedTracing,
         };

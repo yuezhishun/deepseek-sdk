@@ -322,6 +322,7 @@ var loggerFactory = LoggerFactory.Create(builder =>
 
 var clientOptions = new DeepSeekClientOptions
 {
+    AllowMessageContentLogging = true,
     ClientLoggingOptions = new ClientLoggingOptions
     {
         LoggerFactory = loggerFactory,
@@ -338,7 +339,9 @@ var client = new DeepSeekClient("your-api-key", clientOptions);
 说明：
 
 - `EnableMessageLogging = true`：启用请求与响应消息日志
-- `EnableMessageContentLogging = true`：在日志中包含消息体内容
+- `DeepSeekClientOptions.AllowMessageContentLogging = true`：显式允许 SDK 输出消息体日志
+- `ClientLoggingOptions.EnableMessageContentLogging = true`：只有在 SDK 级允许开关打开时才会生效
+- 默认情况下消息体日志是关闭的，以避免流式响应被提前消费
 - `MessageContentSizeLimit`：控制输出的消息体内容大小
 - 请根据需要配置日志提供程序，例如 console、Serilog 或其他 sink
 - 在生产环境开启完整 payload 日志时，请谨慎处理敏感数据
