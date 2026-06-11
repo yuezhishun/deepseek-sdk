@@ -16,6 +16,14 @@ Use the solution file from the repository root:
 ## Release Publishing
 NuGet publishing must be triggered only by pushing a `v*` tag such as `v1.0.2`. `release/*` branches are for release preparation and must not be treated as the package version source. Before tagging, confirm the target commit contains the intended SDK, test, and workflow fixes.
 
+Publish checklist and pitfalls:
+
+- Update both package projects under `src/` so `Version`, `AssemblyVersion`, `FileVersion`, and package release notes match the intended release, for example `1.0.3` / `1.0.3.0`.
+- Keep the workflow packaging step aligned with the pushed tag version. The publish workflow resolves `PACKAGE_VERSION` from the `v*` tag and passes it into `dotnet pack`.
+- Do not use a `v*` branch name as the release trigger. A branch like `v1.0.3` will fail publish validation because the workflow requires `refs/tags/v*`.
+- If a branch and tag share the same name, push the tag with an explicit ref such as `git push origin refs/tags/v1.0.3` to avoid refspec ambiguity.
+- If a tag was pushed before the release commit was ready, move the local tag to the corrected commit, delete the remote tag with `git push origin :refs/tags/v1.0.3`, then push the corrected tag again.
+
 ## Coding Style & Naming Conventions
 Follow the existing C# conventions used across `src/` and `test/`: 4-space indentation, file-scoped namespaces, nullable reference types enabled, and `ImplicitUsings` enabled. Use `PascalCase` for public types and members, `camelCase` for locals and parameters, and keep API-area files grouped with the client they belong to, for example `Chat/ChatClient.cs` and `Chat/ChatModels.cs`. Prefer small, focused request/response model files over large mixed modules.
 
