@@ -13,6 +13,9 @@ Use the solution file from the repository root:
 - `dotnet run --project sample/Sample/Sample.csproj` runs the sample app locally.
 - `dotnet pack src/DeepSeek.Core/DeepSeek.Core.csproj` or `dotnet pack src/DeepSeek.Agents.AI/DeepSeek.Agents.AI.csproj` creates NuGet packages in each project's `pack/` folder.
 
+## Release Publishing
+NuGet publishing must be triggered only by pushing a `v*` tag such as `v1.0.2`. `release/*` branches are for release preparation and must not be treated as the package version source. Before tagging, confirm the target commit contains the intended SDK, test, and workflow fixes.
+
 ## Coding Style & Naming Conventions
 Follow the existing C# conventions used across `src/` and `test/`: 4-space indentation, file-scoped namespaces, nullable reference types enabled, and `ImplicitUsings` enabled. Use `PascalCase` for public types and members, `camelCase` for locals and parameters, and keep API-area files grouped with the client they belong to, for example `Chat/ChatClient.cs` and `Chat/ChatModels.cs`. Prefer small, focused request/response model files over large mixed modules.
 

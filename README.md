@@ -322,6 +322,7 @@ var loggerFactory = LoggerFactory.Create(builder =>
 
 var clientOptions = new DeepSeekClientOptions
 {
+    AllowMessageContentLogging = true,
     ClientLoggingOptions = new ClientLoggingOptions
     {
         LoggerFactory = loggerFactory,
@@ -338,9 +339,12 @@ var client = new DeepSeekClient("your-api-key", clientOptions);
 Notes:
 
 - `EnableMessageLogging = true` enables request and response message logging.
-- `EnableMessageContentLogging = true` includes body content in the logs.
+- `DeepSeekClientOptions.AllowMessageContentLogging = true` is the explicit SDK opt-in for body logging.
+- `ClientLoggingOptions.EnableMessageContentLogging = true` only takes effect when the SDK-level opt-in is also enabled.
+- Message-content logging is disabled by default to keep streaming responses single-consumption-safe.
 - `MessageContentSizeLimit` controls how much body content is emitted.
 - Configure your logger provider such as console, Serilog, or another sink.
+- Streaming scenarios should keep body logging disabled unless payload inspection is strictly required for debugging.
 - Be careful with sensitive data when enabling full payload logging in production.
 
 ## Current caveat

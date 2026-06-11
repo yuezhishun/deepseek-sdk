@@ -137,6 +137,51 @@ public class DeepSeekClientTests
     }
 
     [Fact]
+    public async Task ChatClient_StreamingRequest_WithDefaultLogging_DoesNotConsumeResponseStream()
+    {
+        var sse = "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"Hel\"}}]}\n\n" +
+                  "data: {\"choices\":[{\"delta\":{\"content\":\"lo\"}}]}\n\n" +
+                  "data: [DONE]\n\n";
+        var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StreamContent(new MemoryStream(Encoding.UTF8.GetBytes(sse))),
+        });
+        handler.ConfigureResponse(static response => response.Content.Headers.ContentType = new("text/event-stream"));
+        using var loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder.SetMinimumLevel(LogLevel.Trace);
+            builder.AddProvider(new RecordingLoggerProvider());
+            builder.AddFilter("System.ClientModel", LogLevel.Trace);
+        });
+
+        var client = new DeepSeekClient("test-key", new DeepSeekClientOptions
+        {
+            Transport = new System.ClientModel.Primitives.HttpClientPipelineTransport(new HttpClient(handler)),
+            ClientLoggingOptions = new System.ClientModel.Primitives.ClientLoggingOptions
+            {
+                LoggerFactory = loggerFactory,
+                EnableLogging = true,
+                EnableMessageLogging = true,
+                EnableMessageContentLogging = true,
+                MessageContentSizeLimit = 1024,
+            },
+        }).GetChatClient("deepseek-v4-pro");
+
+        var chunks = new List<ChatCompletion>();
+        await foreach (var chunk in client.CompleteChatStreaming(new ChatCompletionRequest
+        {
+            Messages = [new ChatMessage { Role = "user", Content = "hello" }],
+        }))
+        {
+            chunks.Add(chunk);
+        }
+
+        Assert.Equal(2, chunks.Count);
+        Assert.Equal("Hel", chunks[0].Choices[0].Delta?.Content);
+        Assert.Equal("lo", chunks[1].Choices[0].Delta?.Content);
+    }
+
+    [Fact]
     public async Task ChatClient_StreamingRequest_WithRequestOptions_YieldsBeforeStreamCompletes()
     {
         var stream = new DelayedChunkStream();
@@ -415,7 +460,7 @@ public class DeepSeekClientTests
     }
 
     [Fact]
-    public void ClientOptions_CloneAndFreeze_PreservesClientLoggingOptions()
+    public void ClientOptions_CloneAndFreeze_DisablesMessageContentLoggingByDefault()
     {
         var options = new DeepSeekClientOptions
         {
@@ -438,7 +483,7 @@ public class DeepSeekClientTests
         Assert.Same(NullLoggerFactory.Instance, frozenLoggingOptions.LoggerFactory);
         Assert.True(frozenLoggingOptions.EnableLogging);
         Assert.True(frozenLoggingOptions.EnableMessageLogging);
-        Assert.True(frozenLoggingOptions.EnableMessageContentLogging);
+        Assert.False(frozenLoggingOptions.EnableMessageContentLogging);
         Assert.Equal(2048, frozenLoggingOptions.MessageContentSizeLimit);
         Assert.Contains("x-test-header", frozenLoggingOptions.AllowedHeaderNames);
         Assert.Contains("api-version", frozenLoggingOptions.AllowedQueryParameters);
@@ -451,7 +496,30 @@ public class DeepSeekClientTests
     }
 
     [Fact]
-    public async Task ChatClient_EmitsPipelineLogsAndRedactsAuthorizationHeader()
+    public void ClientOptions_CloneAndFreeze_EnablesMessageContentLogging_WhenExplicitlyAllowed()
+    {
+        var options = new DeepSeekClientOptions
+        {
+            AllowMessageContentLogging = true,
+            ClientLoggingOptions = new System.ClientModel.Primitives.ClientLoggingOptions
+            {
+                LoggerFactory = NullLoggerFactory.Instance,
+                EnableLogging = true,
+                EnableMessageLogging = true,
+                EnableMessageContentLogging = true,
+                MessageContentSizeLimit = 2048,
+            },
+        };
+
+        var client = new DeepSeekClient("test-key", options);
+        var frozenLoggingOptions = Assert.IsType<System.ClientModel.Primitives.ClientLoggingOptions>(client.Options.ClientLoggingOptions);
+
+        Assert.True(client.Options.AllowMessageContentLogging);
+        Assert.True(frozenLoggingOptions.EnableMessageContentLogging);
+    }
+
+    [Fact]
+    public async Task ChatClient_EmitsPipelineMetadataLogs_WhenMessageContentLoggingIsNotOptedIn()
     {
         var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
         {
@@ -487,6 +555,50 @@ public class DeepSeekClientTests
         Assert.Contains(provider.Entries, static entry => entry.Category.StartsWith("System.ClientModel", StringComparison.Ordinal));
         Assert.Contains(provider.Entries, static entry => entry.Message.Contains("Authorization", StringComparison.Ordinal));
         Assert.DoesNotContain(provider.Entries, static entry => entry.Message.Contains("Bearer test-key", StringComparison.Ordinal));
+        Assert.DoesNotContain(provider.Entries, static entry => entry.Message.Contains("hello", StringComparison.Ordinal));
+        Assert.DoesNotContain(provider.Entries, static entry => entry.Message.Contains("\"choices\"", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ChatClient_EmitsPipelineLogsAndMessageContent_WhenExplicitlyOptedIn()
+    {
+        var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"ok\"}}]}", Encoding.UTF8, "application/json"),
+        });
+        var provider = new RecordingLoggerProvider();
+        using var loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder.SetMinimumLevel(LogLevel.Trace);
+            builder.AddProvider(provider);
+            builder.AddFilter("System.ClientModel", LogLevel.Trace);
+        });
+
+        var client = new DeepSeekClient("test-key", new DeepSeekClientOptions
+        {
+            AllowMessageContentLogging = true,
+            Transport = new System.ClientModel.Primitives.HttpClientPipelineTransport(new HttpClient(handler)),
+            ClientLoggingOptions = new System.ClientModel.Primitives.ClientLoggingOptions
+            {
+                LoggerFactory = loggerFactory,
+                EnableLogging = true,
+                EnableMessageLogging = true,
+                EnableMessageContentLogging = true,
+                MessageContentSizeLimit = 1024,
+            },
+        }).GetChatClient("deepseek-v4-pro");
+
+        var response = await client.CompleteChatAsync(new ChatCompletionRequest
+        {
+            Messages = [new ChatMessage { Role = "user", Content = "hello" }],
+        });
+
+        Assert.Equal("ok", response.Value.Choices[0].Message?.Content);
+        Assert.Contains(provider.Entries, static entry => entry.Category.StartsWith("System.ClientModel", StringComparison.Ordinal));
+        Assert.Contains(provider.Entries, static entry => entry.Message.Contains("Authorization", StringComparison.Ordinal));
+        Assert.DoesNotContain(provider.Entries, static entry => entry.Message.Contains("Bearer test-key", StringComparison.Ordinal));
+        Assert.Contains(provider.Entries, static entry => entry.Message.Contains("hello", StringComparison.Ordinal));
+        Assert.Contains(provider.Entries, static entry => entry.Message.Contains("\"choices\"", StringComparison.Ordinal));
     }
 
     private static ChatClient CreateChatClient(RecordingHandler handler)
