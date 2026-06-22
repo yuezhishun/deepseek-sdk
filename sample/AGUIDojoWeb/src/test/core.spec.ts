@@ -4,6 +4,13 @@ import { describe, expect, it, vi } from "vitest";
 import ConfirmChanges from "@/components/document/ConfirmChanges.vue";
 import HaikuDisplay from "@/components/haiku/HaikuDisplay.vue";
 import StepCard from "@/components/steps/StepCard.vue";
+import {
+  applyPlanStateDelta,
+  isLikelyPlanSummaryText,
+  isPlanStateSnapshot,
+  shouldHidePlanSummaryMessage,
+  type PlanState,
+} from "@/lib/agenticPlan";
 import { diffPartialText } from "@/lib/document";
 import { insertGeneratedHaiku, PLACEHOLDER_HAIKU, type Haiku } from "@/lib/haiku";
 import { normalizeWeatherResult } from "@/lib/weather";
@@ -136,5 +143,83 @@ describe("human-in-the-loop steps", () => {
       accepted: true,
       steps: [{ description: "one", status: "enabled" }],
     });
+  });
+});
+
+describe("agentic plan snapshots", () => {
+  it("accepts valid step snapshots", () => {
+    expect(
+      isPlanStateSnapshot({
+        steps: [
+          { description: "Launch", status: "Pending" },
+          { description: "Land", status: "completed" },
+        ],
+      }),
+    ).toBe(true);
+  });
+
+  it("rejects invalid plan snapshots", () => {
+    expect(isPlanStateSnapshot({})).toBe(false);
+    expect(isPlanStateSnapshot({ steps: "nope" })).toBe(false);
+    expect(isPlanStateSnapshot({ steps: [{ description: "Launch", status: "executing" }] })).toBe(false);
+  });
+
+  it("applies a single status delta incrementally", () => {
+    const nextPlanState = applyPlanStateDelta(
+      {
+        steps: [
+          { description: "One", status: "pending" },
+          { description: "Two", status: "pending" },
+        ],
+      },
+      [{ op: "replace", path: "/steps/0/status", value: "completed" }],
+    );
+
+    expect(nextPlanState.steps.map((step) => step.status)).toEqual(["completed", "pending"]);
+  });
+
+  it("applies sequential deltas without skipping intermediate progress", () => {
+    const initialPlanState: PlanState = {
+      steps: [
+        { description: "One", status: "pending" },
+        { description: "Two", status: "pending" },
+        { description: "Three", status: "pending" },
+      ],
+    };
+
+    const afterFirstDelta = applyPlanStateDelta(
+      initialPlanState,
+      [{ op: "replace", path: "/steps/0/status", value: "Completed" }],
+    );
+    const afterSecondDelta = applyPlanStateDelta(
+      afterFirstDelta,
+      [{ op: "replace", path: "/steps/1/status", value: "completed" }],
+    );
+
+    expect(afterFirstDelta.steps.map((step) => step.status)).toEqual(["completed", "pending", "pending"]);
+    expect(afterSecondDelta.steps.map((step) => step.status)).toEqual(["completed", "completed", "pending"]);
+  });
+
+  it("detects markdown plan tables as redundant summary text", () => {
+    expect(
+      isLikelyPlanSummaryText(`
+| Step | Status |
+| --- | --- |
+| Research Mars mission | pending |
+| Launch spacecraft | completed |
+      `),
+    ).toBe(true);
+  });
+
+  it("does not hide a concise completion message when plan state exists", () => {
+    expect(
+      shouldHidePlanSummaryMessage(
+        {
+          role: "assistant",
+          content: "The plan has been fully completed.",
+        },
+        true,
+      ),
+    ).toBe(false);
   });
 });

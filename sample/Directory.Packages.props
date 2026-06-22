@@ -1,0 +1,41 @@
+<Project>
+	<PropertyGroup>
+		<ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageVersion Include="Microsoft.Agents.AI" Version="1.9.0" />
+		<PackageVersion Include="Microsoft.Agents.AI.AGUI" Version="1.9.0-preview.260603.1" />
+		<PackageVersion Include="Microsoft.Agents.AI.Hosting.AGUI.AspNetCore" Version="1.9.0-preview.260603.1" />
+		<PackageVersion Include="Microsoft.Agents.AI.Hosting.AGUI" Version="1.9.0-preview.260603.1" />
+		<PackageVersion Include="Microsoft.Extensions.AI" Version="10.7.0" />
+		<PackageVersion Include="Serilog.Extensions.Logging" Version="10.0.0" />
+		<PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
+		<PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
+		<PackageVersion Include="DeepSeek.Core" Version="1.0.3" />
+		<PackageVersion Include="DeepSeek.Agents.AI" Version="1.0.3" />
+		<PackageVersion Include="Microsoft.Agents.AI.DurableTask" Version="1.9.0-preview.260603.1" />
+		<PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.8" />
+		<PackageVersion Include="Microsoft.Extensions.Configuration.UserSecrets" Version="10.0.8" />
+		<PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.8" />
+		<PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.8" />
+
+		<PackageVersion Include="Microsoft.Agents.AI.Hosting.AzureFunctions" Version="1.9.0-preview.260603.1" />
+		<PackageVersion Include="Microsoft.Agents.AI.Mcp" Version="1.9.0" />
+		<PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.9.0" />
+		<PackageVersion Include="Microsoft.Agents.AI.Workflows.Generators" Version="1.9.0" />
+		<PackageVersion Include="Microsoft.SemanticKernel.Connectors.InMemory" Version="1.67.0-preview" />
+		<PackageVersion Include="Microsoft.SemanticKernel.Connectors.Qdrant" Version="1.67.0-preview" />
+		<!-- OpenTelemetry -->
+		<PackageVersion Include="OpenTelemetry" Version="1.15.3" />
+		<PackageVersion Include="OpenTelemetry.Api" Version="1.15.3" />
+		<PackageVersion Include="OpenTelemetry.Exporter.Console" Version="1.15.3" />
+		<PackageVersion Include="OpenTelemetry.Exporter.InMemory" Version="1.15.3" />
+		<PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.15.3" />
+		<PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.15.3" />
+		<PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.15.2" />
+		<PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.15.1" />
+		<PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.15.1" />
+	</ItemGroup>
+
+</Project>

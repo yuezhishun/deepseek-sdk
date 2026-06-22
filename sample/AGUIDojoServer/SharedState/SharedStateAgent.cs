@@ -74,7 +74,24 @@ internal sealed class SharedStateAgent : DelegatingAIAgent
         }
 
         var response = allUpdates.ToAgentResponse();
-
+        var responseText = response.Text;
+        JsonElement stateSnapshot;
+        if (!string.IsNullOrWhiteSpace(responseText))
+            yield break;
+        try
+        {
+            stateSnapshot = JsonDocument.Parse(responseText).RootElement.Clone();
+        }
+        catch (JsonException)
+        {
+            yield break;
+        }
+        byte[] stateBytes = JsonSerializer.SerializeToUtf8Bytes(stateSnapshot,_jsonSerializerOptions.GetTypeInfo(typeof(JsonElement)));
+        yield return new AgentResponseUpdate(ChatRole.System, [new DataContent(stateBytes, "application/json")])
+        {
+            AgentId = this.Id,
+        };
+        /*
         if (TryParseStructuredState(response.Text, out JsonElement stateSnapshot))
         {
             byte[] stateBytes = JsonSerializer.SerializeToUtf8Bytes(
@@ -89,7 +106,7 @@ internal sealed class SharedStateAgent : DelegatingAIAgent
         {
             yield break;
         }
-
+        */
         var secondRunMessages = messages.Concat(response.Messages).Append(
             new ChatMessage(
                 ChatRole.System,

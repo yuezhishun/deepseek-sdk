@@ -1,18 +1,24 @@
 <script setup lang="ts">
 import { CopilotSidebar } from "@copilotkit/vue/v2";
+import { computed } from "vue";
 import type { AgentId } from "@/lib/agui";
 
-defineProps<{
+const props = defineProps<{
   agentId: AgentId;
   defaultOpen?: boolean;
   title: string;
 }>();
+
+const chatLabels = computed(() => ({ modalHeaderTitle: props.title } as any));
 </script>
 
 <template>
-  <CopilotSidebar
-    :agent-id="agentId"
-    :default-open="defaultOpen"
-    :labels="{ modalHeaderTitle: title as any }"
-  />
+  <div data-testid="shared-state-chat-panel" class="hidden h-full md:block">
+    <CopilotSidebar
+      :agent-id="props.agentId"
+      :default-open="props.defaultOpen"
+      :labels="chatLabels"
+      class="h-full"
+    />
+  </div>
 </template>

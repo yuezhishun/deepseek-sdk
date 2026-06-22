@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { CopilotChat } from "@copilotkit/vue/v2";
+import { computed } from "vue";
 import type { AgentId } from "@/lib/agui";
 import { useMobileChat } from "@/composables/useMobileChat";
 
@@ -8,6 +9,7 @@ const props = defineProps<{
   title: string;
   description: string;
 }>();
+const chatLabels = computed(() => ({ modalHeaderTitle: props.title } as any));
 
 const defaultChatHeight = 50;
 const {
@@ -75,7 +77,11 @@ function toggleChat() {
     </div>
 
     <div class="flex min-h-0 flex-1 flex-col overflow-hidden pb-16">
-      <CopilotChat :agent-id="props.agentId" class="flex h-full flex-col" />
+      <CopilotChat
+        :agent-id="props.agentId"
+        :labels="chatLabels"
+        class="flex h-full min-h-0 flex-col"
+      />
     </div>
   </div>
 

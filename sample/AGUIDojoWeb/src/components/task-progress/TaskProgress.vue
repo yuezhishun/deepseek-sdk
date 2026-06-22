@@ -16,6 +16,12 @@ const { theme } = useTheme();
 const completedCount = computed(() =>
   props.steps.filter((step) => step.status === "completed").length,
 );
+const currentPendingIndex = computed(() =>
+  props.steps.findIndex((step) => step.status === "pending"),
+);
+const isComplete = computed(() =>
+  props.steps.length > 0 && completedCount.value === props.steps.length,
+);
 const progressPercentage = computed(() =>
   props.steps.length ? (completedCount.value / props.steps.length) * 100 : 0,
 );
@@ -62,7 +68,7 @@ const progressPercentage = computed(() =>
           :class="
             step.status === 'completed'
               ? 'border border-green-200/60 bg-gradient-to-r from-green-50 to-emerald-50'
-              : index === steps.findIndex((candidate) => candidate.status === 'pending')
+              : index === currentPendingIndex
                 ? 'border border-blue-200/60 bg-gradient-to-r from-blue-50 to-purple-50 shadow-md shadow-blue-200/50'
                 : 'border border-gray-200/60 bg-gray-50/50'
           "
@@ -86,7 +92,10 @@ const progressPercentage = computed(() =>
             >
               {{ step.description }}
             </div>
-            <div v-if="step.status === 'pending'" class="mt-1 animate-pulse text-sm text-blue-600">
+            <div
+              v-if="step.status === 'pending' && index === currentPendingIndex && !isComplete"
+              class="mt-1 animate-pulse text-sm text-blue-600"
+            >
               Processing...
             </div>
           </div>

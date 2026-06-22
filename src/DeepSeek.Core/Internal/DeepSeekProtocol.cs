@@ -169,9 +169,16 @@ internal static class DeepSeekProtocol
             return;
         }
 
-        if (response.Content is null)
+        // response.Content throws InvalidOperationException("The response is not buffered.")
+        // when BufferResponse is false (streaming mode). Always buffer first.
+        try
         {
             await response.BufferContentAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Ignore — response may already be consumed or unbufferable;
+            // we still throw with the status code and whatever info we have.
         }
 
         throw CreateException(response, requestUri);

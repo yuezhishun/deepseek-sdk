@@ -1,25 +1,25 @@
 <script setup lang="ts">
-import { computed, nextTick, reactive, ref, watch } from "vue";
-import { useAgent, useConfigureSuggestions, useCopilotKit, UseAgentUpdate } from "@copilotkit/vue/v2";
-import { AGENT_IDS } from "@/lib/agui";
+import type { AbstractAgent } from "@ag-ui/client";
+import { computed, nextTick, shallowRef } from "vue";
+import type { ShallowRef } from "vue";
+import { useConfigureSuggestions } from "@copilotkit/vue/v2";
 import { useMobileView } from "@/composables/useMobileView";
 import {
   cookingTimeValues,
-  INITIAL_RECIPE_STATE,
-  mergeRecipeUpdate,
   SkillLevel,
   SpecialPreferences,
   type Ingredient,
-  type Recipe,
-  type RecipeAgentState,
 } from "./types";
+import { useSharedRecipeAgent } from "./useSharedRecipeAgent";
+
+const props = defineProps<{
+  agentRef?: ShallowRef<AbstractAgent | null>;
+}>();
 
 const { isMobile } = useMobileView();
-const { agent } = useAgent({
-  agentId: AGENT_IDS.sharedState,
-  updates: [UseAgentUpdate.OnStateChanged, UseAgentUpdate.OnRunStatusChanged],
+const { changedKeys, improveRecipe, isLoading, recipe, updateRecipe } = useSharedRecipeAgent({
+  agentRef: props.agentRef,
 });
-const { copilotkit } = useCopilotKit();
 
 useConfigureSuggestions({
   suggestions: [
@@ -30,53 +30,11 @@ useConfigureSuggestions({
   available: "always",
 });
 
-const recipe = reactive<Recipe>(structuredClone(INITIAL_RECIPE_STATE.recipe));
-const editingInstructionIndex = ref<number | null>(null);
-const changedKeys = ref<string[]>([]);
-
-const agentState = computed(() => agent.value?.state as RecipeAgentState | undefined);
-const isLoading = computed(() => Boolean(agent.value?.isRunning));
-
-function setAgentState(state: RecipeAgentState) {
-  agent.value?.setState(state);
-}
-
-function updateRecipe(partialRecipe: Partial<Recipe>) {
-  Object.assign(recipe, mergeRecipeUpdate(recipe, partialRecipe));
-  setAgentState({ recipe: structuredClone(recipe) });
-}
-
-watch(
-  agent,
-  () => {
-    if (!agentState.value?.recipe) {
-      setAgentState(INITIAL_RECIPE_STATE);
-    }
-  },
-  { immediate: true },
-);
-
-watch(
-  () => agentState.value?.recipe,
-  (nextRecipe) => {
-    if (!nextRecipe) return;
-    const nextChangedKeys: string[] = [];
-
-    for (const key of Object.keys(recipe) as (keyof Recipe)[]) {
-      let agentValue = nextRecipe[key] as any;
-      if (typeof agentValue === "string") {
-        agentValue = agentValue.replace(/\\n/g, "\n");
-      }
-      if (agentValue != null && JSON.stringify(agentValue) !== JSON.stringify(recipe[key])) {
-        (recipe as any)[key] = agentValue;
-        nextChangedKeys.push(key);
-      }
-    }
-
-    changedKeys.value = nextChangedKeys.length > 0 ? nextChangedKeys : isLoading.value ? changedKeys.value : [];
-  },
-  { deep: true },
-);
+const editingInstructionIndex = shallowRef<number | null>(null);
+const recipeCardStyle = computed(() => ({
+  marginBottom: isMobile.value ? "100px" : "0",
+  maxHeight: isMobile.value ? "calc(100dvh - 140px)" : "calc(100dvh - 40px)",
+}));
 
 function handleDietaryChange(preference: string, checked: boolean) {
   updateRecipe({
@@ -126,16 +84,6 @@ function removeInstruction(index: number) {
   });
 }
 
-function improveRecipe() {
-  if (isLoading.value || !agent.value) return;
-  agent.value.addMessage({
-    id: crypto.randomUUID(),
-    role: "user",
-    content: "Improve the recipe",
-  });
-  void copilotkit.value.runAgent({ agent: agent.value });
-}
-
 defineExpose({ recipe, updateRecipe });
 </script>
 
@@ -143,10 +91,11 @@ defineExpose({ recipe, updateRecipe });
   <form
     data-testid="recipe-card"
     class="recipe-card"
-    :style="isMobile ? { marginBottom: '100px' } : {}"
+    :style="recipeCardStyle"
   >
     <div class="recipe-header">
       <input
+        data-testid="recipe-title-input"
         class="recipe-title-input"
         type="text"
         :value="recipe.title"

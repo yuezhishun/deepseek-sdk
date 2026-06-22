@@ -1,5 +1,6 @@
-using DeepSeek.Agents.AI;
 using DeepSeek;
+using DeepSeek.Agents.AI;
+using DeepSeek.Chat;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
@@ -15,6 +16,7 @@ var builder = new ConfigurationBuilder()
     .SetBasePath(Directory.GetCurrentDirectory())
     .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
     .AddUserSecrets<Program>();
+
 var loggerFactory = LoggerFactory.Create(builder =>
 {
     builder.SetMinimumLevel(LogLevel.Trace);
@@ -30,6 +32,7 @@ var loggerFactory = LoggerFactory.Create(builder =>
 
     builder.AddSerilog(); 
 });
+
 var configuration = builder.Build();
 
 var apiKey = configuration["apiKey"];
@@ -46,6 +49,7 @@ if (apiKey == null)
 var clientOptions = new DeepSeekClientOptions
 {
     EnableDistributedTracing = enableDistributedTracing,
+    AllowMessageContentLogging = enablePipelineLogging,
     ClientLoggingOptions = new ClientLoggingOptions
     {
         LoggerFactory = loggerFactory,
@@ -76,11 +80,12 @@ var agent = chatClient.AsAIAgent(new ChatClientAgentOptions
     {
         Instructions = "Use tools whenever they can improve accuracy. Think first, call tools if needed, wait until you have all required tool results, then answer with those tool results.",
         Tools = [weatherTool, timeTool],
-        AllowMultipleToolCalls = true,
+        AllowMultipleToolCalls = true
     },
 });
     //.AsBuilder().UseLogging(loggerFactory).Build();
 var session = await agent.CreateSessionAsync(CancellationToken.None);
+
 var options = new ChatClientAgentRunOptions
 {
     ChatOptions = new ChatOptions
