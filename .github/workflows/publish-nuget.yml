@@ -54,10 +54,10 @@ jobs:
           "PACKAGE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Pack DeepSeek.Core
-        run: dotnet pack src/DeepSeek.Core/DeepSeek.Core.csproj --configuration "$CONFIGURATION" --no-restore --output "$PACKAGE_OUTPUT" -p:ContinuousIntegrationBuild=true -p:Version=$env:PACKAGE_VERSION
+        run: dotnet pack src/DeepSeek.Core/DeepSeek.Core.csproj --configuration "$CONFIGURATION" --no-restore --output "$PACKAGE_OUTPUT" -p:ContinuousIntegrationBuild=true -p:Version=${{ env.PACKAGE_VERSION }}
 
       - name: Pack DeepSeek.Agents.AI
-        run: dotnet pack src/DeepSeek.Agents.AI/DeepSeek.Agents.AI.csproj --configuration "$CONFIGURATION" --no-restore --output "$PACKAGE_OUTPUT" -p:ContinuousIntegrationBuild=true -p:Version=$env:PACKAGE_VERSION
+        run: dotnet pack src/DeepSeek.Agents.AI/DeepSeek.Agents.AI.csproj --configuration "$CONFIGURATION" --no-restore --output "$PACKAGE_OUTPUT" -p:ContinuousIntegrationBuild=true -p:Version=${{ env.PACKAGE_VERSION }}
 
       - name: Validate NuGet API key
         shell: pwsh

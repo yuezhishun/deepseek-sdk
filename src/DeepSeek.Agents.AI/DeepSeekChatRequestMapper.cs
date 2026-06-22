@@ -309,7 +309,20 @@ Schema:
             return null;
         }
 
-        return tools.Select(MapTool).ToList();
+        // Deduplicate by function name — DeepSeek API rejects duplicate tool names.
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var result = new List<WireChatTool>(tools.Count);
+        foreach (var tool in tools)
+        {
+            var wireTool = MapTool(tool);
+            var name = wireTool.Function?.Name;
+            if (name is not null && seen.Add(name))
+            {
+                result.Add(wireTool);
+            }
+        }
+
+        return result;
     }
 
     private static WireChatTool MapTool(AITool tool)

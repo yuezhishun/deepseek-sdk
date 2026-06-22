@@ -1,4 +1,4 @@
-﻿using AGUIDojoServer.AgenticUI;
+using AGUIDojoServer.AgenticUI;
 using AGUIDojoServer.BackendToolRendering;
 using AGUIDojoServer.PredictiveStateUpdates;
 using AGUIDojoServer.SharedState;
@@ -17,22 +17,25 @@ internal static class ChatClientAgentFactory
 {
     private static DeepSeekClient? s_openAIClient;
     private static string? s_modelName;
-    private static ILoggerFactory? s_loggerFactory;
 
-    public static void Initialize(IConfiguration configuration,
-                                  ILoggerFactory loggerFactory)
+    public static void Initialize(IConfiguration configuration, ILoggerFactory loggerFactory)
     {
         s_modelName = configuration["DeepSeek:Model"] ?? "deepseek-v4-flash";
-        s_loggerFactory = loggerFactory;
         var apiKey = configuration["apiKey"];
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            throw new InvalidOperationException("Configuration value 'apiKey' is required.");
+        }
+
         var loggingSection = configuration.GetSection("DeepSeek:Logging");
         var enablePipelineLogging = loggingSection.GetValue<bool>("Enabled");
         var enableDistributedTracing = loggingSection.GetValue<bool>("EnableDistributedTracing");
         var messageContentSizeLimit = loggingSection.GetValue<int?>("MessageContentSizeLimit") ?? 4096;
-        var baseUrl = configuration["DeepSeek:BaseUrl"];
+
         var clientOptions = new DeepSeekClientOptions
         {
             EnableDistributedTracing = enableDistributedTracing,
+            AllowMessageContentLogging = enablePipelineLogging,
             ClientLoggingOptions = new ClientLoggingOptions
             {
                 LoggerFactory = loggerFactory,
@@ -42,12 +45,13 @@ internal static class ChatClientAgentFactory
                 MessageContentSizeLimit = messageContentSizeLimit,
             },
         };
+
         s_openAIClient = new DeepSeekClient(apiKey, clientOptions);
     }
 
     public static ChatClientAgent CreateAgenticChat()
     {
-        ChatClient chatClient = s_openAIClient!.GetChatClient(s_modelName!);
+        var chatClient = s_openAIClient!.GetChatClient(s_modelName!);
 
         return chatClient.AsIChatClient().AsAIAgent(new ChatClientAgentOptions
         {
@@ -58,7 +62,7 @@ internal static class ChatClientAgentFactory
 
     public static ChatClientAgent CreateBackendToolRendering()
     {
-        ChatClient chatClient = s_openAIClient!.GetChatClient(s_modelName!);
+        var chatClient = s_openAIClient!.GetChatClient(s_modelName!);
 
         return chatClient.AsIChatClient().AsAIAgent(new ChatClientAgentOptions
         {
@@ -80,7 +84,7 @@ internal static class ChatClientAgentFactory
 
     public static ChatClientAgent CreateHumanInTheLoop()
     {
-        ChatClient chatClient = s_openAIClient!.GetChatClient(s_modelName!);
+        var chatClient = s_openAIClient!.GetChatClient(s_modelName!);
 
         return chatClient.AsIChatClient().AsAIAgent(new ChatClientAgentOptions
         {
@@ -110,7 +114,7 @@ internal static class ChatClientAgentFactory
 
     public static ChatClientAgent CreateToolBasedGenerativeUI()
     {
-        ChatClient chatClient = s_openAIClient!.GetChatClient(s_modelName!);
+        var chatClient = s_openAIClient!.GetChatClient(s_modelName!);
 
         return chatClient.AsIChatClient().AsAIAgent(new ChatClientAgentOptions
         {
@@ -121,7 +125,7 @@ internal static class ChatClientAgentFactory
 
     public static AIAgent CreateAgenticUI(JsonSerializerOptions options)
     {
-        ChatClient chatClient = s_openAIClient!.GetChatClient(s_modelName!);
+        var chatClient = s_openAIClient!.GetChatClient(s_modelName!);
         var baseAgent = chatClient.AsIChatClient().AsAIAgent(new ChatClientAgentOptions
         {
             Name = "AgenticUIAgent",
@@ -129,20 +133,25 @@ internal static class ChatClientAgentFactory
             ChatOptions = new ChatOptions
             {
                 Instructions = """
-                    When planning use tools only, without any other messages.
+                    Build plans in the same event shape as the official demo.
                     IMPORTANT:
-                    - Use the `create_plan` tool to set the initial state of the steps
-                    - Use the `update_plan_step` tool to update the status of each step
-                    - Do NOT repeat the plan or summarise it in a message
-                    - Do NOT confirm the creation or updates in a message
+                    - First call the `create_plan` tool to set the initial state of the steps.
+                    - Then call the `update_plan_step` tool sequentially to complete each step.
+                    - Do NOT output a markdown table.
+                    - Do NOT output a numbered list or bullet list of steps.
+                    - Do NOT repeat, restate, or summarize the plan body in assistant text.
+                    - Do NOT confirm intermediate progress in assistant text.
                     - Do NOT ask the user for additional information or next steps
                     - Do NOT leave a plan hanging, always complete the plan via `update_plan_step` if one is ongoing.
                     - Continue calling update_plan_step until all steps are marked as completed.
+                    - After all steps are completed, output exactly one short closing sentence only.
+                    - The closing sentence should be similar to: "The plan has been fully completed."
 
                     Only one plan can be active at a time, so do not call the `create_plan` tool
                     again until all the steps in current plan are completed.
                     """,
-                Tools = [
+                Tools =
+                [
                     AIFunctionFactory.Create(
                         AgenticPlanningTools.CreatePlan,
                         name: "create_plan",
@@ -154,7 +163,7 @@ internal static class ChatClientAgentFactory
                         description: "Update a step in the plan with new description or status.",
                         AGUIDojoServerSerializerContext.Default.Options)
                 ],
-                AllowMultipleToolCalls = false
+                AllowMultipleToolCalls = false,
             }
         });
 
@@ -163,7 +172,7 @@ internal static class ChatClientAgentFactory
 
     public static AIAgent CreateSharedState(JsonSerializerOptions options)
     {
-        ChatClient chatClient = s_openAIClient!.GetChatClient(s_modelName!);
+        var chatClient = s_openAIClient!.GetChatClient(s_modelName!);
 
         var baseAgent = chatClient.AsIChatClient().AsAIAgent(new ChatClientAgentOptions
         {
@@ -176,7 +185,7 @@ internal static class ChatClientAgentFactory
 
     public static AIAgent CreatePredictiveStateUpdates(JsonSerializerOptions options)
     {
-        ChatClient chatClient = s_openAIClient!.GetChatClient(s_modelName!);
+        var chatClient = s_openAIClient!.GetChatClient(s_modelName!);
 
         var baseAgent = chatClient.AsIChatClient().AsAIAgent(new ChatClientAgentOptions
         {
@@ -199,7 +208,8 @@ internal static class ChatClientAgentFactory
                     
                     After the user confirms the changes, provide a brief summary of what you wrote.
                     """,
-                Tools = [
+                Tools =
+                [
                     AIFunctionFactory.Create(
                         WriteDocument,
                         name: "write_document",
@@ -225,7 +235,6 @@ internal static class ChatClientAgentFactory
     [Description("Write a document in markdown format.")]
     private static string WriteDocument([Description("The document content to write.")] string document)
     {
-        // Simply return success - the document is tracked via state updates
         return "Document written successfully";
     }
 }
