@@ -100,16 +100,41 @@ var options = new ChatClientAgentRunOptions
     },
 };
 Console.WriteLine();
-var round1Question = "杭州今天天气怎么样？北京时间现在几点？";
-await Examples.RunStreamingAgentRoundAsync(agent, session, options, 1, round1Question);
+//var round1Question = "杭州今天天气怎么样？北京时间现在几点？";
+//await Examples.RunStreamingAgentRoundAsync(agent, session, options, 1, round1Question);
 
-var round2Question = "我明天下午出门需要戴墨镜吗？";
-await Examples.RunStreamingAgentRoundAsync(agent, session, options, 2, round2Question);
+//var round2Question = "我明天下午出门需要戴墨镜吗？";
+//await Examples.RunStreamingAgentRoundAsync(agent, session, options, 2, round2Question);
 
 
-//await Examples.GetModels(sdk);
-//await Examples.GetUserBalanceAsync(sdk);
+await Examples.GetModels(sdk);
+await Examples.GetUserBalanceAsync(sdk);
 
+// 强类型 JSON 示例
+var jsonAgent = chatClient.AsAIAgent(new ChatClientAgentOptions
+{
+    Name = "StructuredJsonAgent",
+    ChatOptions = new ChatOptions
+    {
+        Instructions = "请根据用户描述提取结构化书籍信息，仅输出 JSON。"
+    },
+});
+var jsonSession = await jsonAgent.CreateSessionAsync(CancellationToken.None);
+
+const string bookDescription = @"我最近读了一本很好的书，叫《三体》，是刘慈欣写的科幻小说，2008年出版。
+故事讲述地球人类文明和三体文明之间的信息交流、生死搏杀及两个文明在宇宙中的兴衰历程。
+这本书获得了雨果奖，是亚洲首次获得该奖项的作品。";
+
+await Examples.RunStructuredJsonWithChatClientAsync(chatClient);
+await Examples.RunStructuredJsonWithChatClientStreamingAsync(chatClient);
+await Examples.RunStructuredJsonWithAgentAsync(jsonAgent, jsonSession, 1, bookDescription);
+await Examples.RunStructuredJsonWithAgentNonStreamingAsync(jsonAgent, jsonSession, 2, bookDescription);
+
+// Swagger → Agent Tools 示例
+// 取消注释并替换为实际的 Swagger JSON URL 即可运行
+// const string swaggerUrl = "https://petstore.swagger.io/v2/swagger.json";
+// const string swaggerQuery = "What pets are available?";
+// await Examples.RunSwaggerToolsAsync(chatClient, swaggerUrl, swaggerQuery);
 
 Console.WriteLine("done");
 Console.ReadKey();
