@@ -1,6 +1,6 @@
 # deepseek-sdk
 
-当前 SDK 版本为 **1.0.6**，安装命令见下方；Microsoft Agent Framework 引用已更新至 **1.28.0**。
+当前 SDK 版本为 **1.0.7**，安装命令见下方；Microsoft Agent Framework 引用已更新至 **1.28.0**。
 
 `deepseek-sdk` is a .NET SDK for DeepSeek with three primary libraries:
 
@@ -12,6 +12,14 @@
 - implements thinking mode following DeepSeek's official documentation, including reasoning enablement, reasoning effort control, `reasoning_content` handling, and continued reasoning semantics across multi-turn conversations and tool calls
 
 ## Changelog
+
+### 1.0.7
+
+- 普通 JSON 与 Schema 模式统一使用精简中文提示词，保留调用方的语言要求并移除无关示例。
+- Chat、Responses、Anthropic 补齐最终 JSON / Schema 校验；Anthropic 不再忽略 `ResponseFormat`，Responses 对原生服务端不接受的数组根节点与字典 Schema 使用提示词和本地校验回退。
+- 修复 Chat、Anthropic 流式空格片段丢失；新增 138 个离线回归用例及在线覆盖，验证 .NET 11 RC3。
+- 启用 JSON 格式时，空白、非法 JSON、截断或 Schema 不匹配会抛出 `JsonException`；流式结果须完整枚举且未抛异常才算校验成功。详见 [JSON 输出说明](src/DeepSeek.Agents.AI/README.md#json-output)。
+- 三个包统一为 `1.0.7` / `1.0.7.0`；Agents 新增 MIT 许可依赖 `JsonSchema.Net 8.0.5`。
 
 ### 1.0.6
 
@@ -40,9 +48,9 @@
 ## Installation
 
 ```bash
-dotnet add package DeepSeek.Core --version 1.0.6
-dotnet add package DeepSeek.Agents.AI --version 1.0.6
-dotnet add package DeepSeek.Decisions --version 1.0.6
+dotnet add package DeepSeek.Core --version 1.0.7
+dotnet add package DeepSeek.Agents.AI --version 1.0.7
+dotnet add package DeepSeek.Decisions --version 1.0.7
 ```
 
 The core NuGet package is named `DeepSeek.Core`, while the public namespaces remain `DeepSeek` and `DeepSeek.*`.
@@ -151,6 +159,8 @@ Supported image formats are JPEG, PNG, GIF, and WebP. Inline image URLs/data URL
 For streaming, enumerate `CreateResponseStreaming(...)`. Events expose their semantic `Type`, `SequenceNumber`, typed `Item`/`ContentPart`, and terminal `Response`; the stream ends with `response.completed`, `response.incomplete`, or `response.failed`.
 
 `ChatClient` uses `response_format: { "type": "json_object" }` for Chat JSON Output. Strict function schemas are a Beta capability. `GetChatPrefixClient(...)` targets `/beta/chat/completions` and validates the final assistant message with `Prefix = true`; `CompletionsClient` targets `/beta/completions` and accepts `Prompt`, `Suffix`, `Stop`, and `Stream`.
+
+`DeepSeek.Agents.AI` 的 Chat、Responses、Anthropic 适配器均支持 `ChatOptions.ResponseFormat`，普通 JSON 与 Schema 提示词统一使用精简中文，并校验最终 JSON / Schema。Anthropic 使用提示词和本地校验实现格式约束；Responses 对服务端不接受的非对象根节点和字典 Schema 使用相同回退。流式结果需完整枚举且未抛异常后才能视为已校验，详见 [JSON 输出说明](src/DeepSeek.Agents.AI/README.md#json-output)。
 
 `AnthropicClient` targets `/anthropic/v1/messages` and supports system prompts, stop sequences, thinking, output effort, tool use/results, and the documented streaming events. DeepSeek ignores unsupported Anthropic fields such as `top_k`, while `metadata.user_id` is supported.
 

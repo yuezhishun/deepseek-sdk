@@ -6,10 +6,10 @@
 
 ## 引用与入口
 
-源码项目为 `src/DeepSeek.Decisions/DeepSeek.Decisions.csproj`，可直接使用 `ProjectReference`。包版本为 `1.0.6`，依赖 `DeepSeek.Core 1.0.6`；NuGet 发布由仓库 `v1.0.6` tag 流程完成。
+源码项目为 `src/DeepSeek.Decisions/DeepSeek.Decisions.csproj`，可直接使用 `ProjectReference`。包版本为 `1.0.7`，依赖 `DeepSeek.Core 1.0.7`；NuGet 发布由仓库 `v1.0.7` tag 流程完成。
 
 ```bash
-dotnet add package DeepSeek.Decisions --version 1.0.6
+dotnet add package DeepSeek.Decisions --version 1.0.7
 ```
 
 ```csharp

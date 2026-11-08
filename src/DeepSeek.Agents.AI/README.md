@@ -5,10 +5,10 @@ Adapter package for using the DeepSeek typed client with `Microsoft.Extensions.A
 ## Install
 
 ```bash
-dotnet add package DeepSeek.Agents.AI --version 1.0.6
+dotnet add package DeepSeek.Agents.AI --version 1.0.7
 ```
 
-This package depends on `DeepSeek.Core 1.0.6`.
+This package depends on `DeepSeek.Core 1.0.7`.
 
 Model identifiers are supplied by the caller as strings. Neither this adapter nor `DeepSeek.Core` publishes a fixed model enum or constants, so model name changes do not require a package upgrade.
 
@@ -21,7 +21,7 @@ The adapter is built and tested against:
 - `Microsoft.Agents.AI 1.28.0`
 - `Microsoft.Extensions.AI 10.11.0`
 
-以上为 2026-11-08 核对的最新稳定版；AGUI hosting 升级为 `1.28.0-preview.261106.1`。`Microsoft.Agents.AI.AGUI` 的最新版本仍为 `1.13.0-preview.260703.1`，保留该引用。新版依赖要求将 `Microsoft.Bcl.AsyncInterfaces` 同步至 `10.0.13`；SDK 包版本为 `1.0.6`。
+以上为 2026-11-08 核对的最新稳定版；AGUI hosting 升级为 `1.28.0-preview.261106.1`。`Microsoft.Agents.AI.AGUI` 的最新版本仍为 `1.13.0-preview.260703.1`，保留该引用。新版依赖要求将 `Microsoft.Bcl.AsyncInterfaces` 同步至 `10.0.13`；SDK 包版本为 `1.0.7`。
 
 版本来源：[Agent Framework 官方 NuGet](https://www.nuget.org/packages/Microsoft.Agents.AI/1.28.0)、[Microsoft.Extensions.AI 官方 NuGet](https://www.nuget.org/packages/Microsoft.Extensions.AI/10.11.0)。
 
@@ -47,6 +47,12 @@ Console.WriteLine(response.Text);
 ```
 
 ## Changelog
+
+### 1.0.7
+
+- 普通 JSON 和 Schema 模式统一使用精简中文提示词，保留调用方对字符串语言的要求，移除固定的无关示例。
+- 三条适配路径增加最终 JSON / Schema 校验；Anthropic 不再忽略 `ResponseFormat`。修复 Chat、Anthropic 流式空格片段丢失。
+- 新增 MIT 许可的 `JsonSchema.Net 8.0.5` 依赖用于本地 Schema 校验，继续支持 `netstandard2.0`。
 
 ### 1.0.6
 
@@ -122,6 +128,16 @@ The Responses adapter is stateless: callers provide the complete input history f
 
 ## JSON Output
 
-DeepSeek currently exposes JSON Output through `response_format: { "type": "json_object" }`.
+`ChatOptions.ResponseFormat` 在三个 `IChatClient` / `AIAgent` 适配器中均生效：
 
-When you set `ChatOptions.ResponseFormat` to `ChatResponseFormat.Json` or `ChatResponseFormat.ForJsonSchema<T>()`, this provider sends `json_object` on the wire and augments the system prompt with json/schema guidance for DeepSeek models. `ForJsonSchema<T>()` should be treated as prompt augmentation, not native server-side schema enforcement.
+| 协议 | 普通 JSON 模式 | 带 Schema 模式 |
+| --- | --- | --- |
+| Chat | `response_format: json_object`，附加中文提示词 | 同一 JSON 模式，提示词携带原始 Schema，并在本地校验 |
+| Responses | `text.format: json_object`，附加中文提示词 | 常规对象使用原生 `json_schema`；非对象根节点或包含 Schema 类型 `additionalProperties` 时，使用 JSON 模式、Schema 提示词和本地校验回退 |
+| Anthropic | 中文提示词和本地校验 | 中文提示词携带原始 Schema，并在本地校验；不发送协议未支持的 `response_format` |
+
+提示词要求只输出 JSON，禁止解释、Markdown 代码块和前后缀；字段名和枚举值不翻译，字符串内容的语言遵循调用方要求。调用方原有 `Instructions` 会保留，选项不会被修改。普通 JSON 模式要求一个对象；Schema 模式按 Schema 决定根类型，可输出数组。
+
+三个适配器均检查最终结果：空白（即使正常结束）、非法 JSON、非完整终止、Schema 不匹配均抛出 `System.Text.Json.JsonException`，不自动修复或重试。取得原始响应时，可读取异常的 `Data["RawRepresentation"]`；流中断时若尚无原始响应，该值可能为空。Schema 校验使用 `JsonSchema.Net 8.0.5`，未声明方言时采用 Draft 2020-12，覆盖必填项、类型、枚举、额外字段、数组、局部 `$ref` 和组合约束；`format` 按 JSON Schema 默认语义作为注解，不额外强制校验。
+
+流式调用仍立即输出增量，只有完整枚举到结束且未抛异常，才能将聚合结果视为已校验。字符串中的空白片段会原样保留。工具调用的中间响应无需输出 JSON 文档，后续最终文本仍需满足格式要求。默认 `ResponseFormat` 与单次选项按现有规则合并，单次指定 `ChatResponseFormat.Text` 可关闭 JSON 提示词和校验。直接使用 `DeepSeek.Core` 原生协议客户端的行为不变。

@@ -6,15 +6,15 @@
     <LangVersion>latest</LangVersion>
     <Authors>Yue Zhishun</Authors>
     <Description>基于 DeepSeek API 的 Jev 和 Decisions 强类型决策客户端。</Description>
-    <PackageReleaseNotes>1.0.6：新增独立 Jev 与 Decisions 决策能力，支持文本、JSON、图片、概率读数、自动回退和诊断。</PackageReleaseNotes>
+    <PackageReleaseNotes>1.0.7：依赖 DeepSeek.Core 1.0.7，与 Core、Agents 统一补丁版本发布。</PackageReleaseNotes>
     <PackageProjectUrl>https://github.com/yuezhishun/deepseek-sdk</PackageProjectUrl>
     <RepositoryUrl>https://github.com/yuezhishun/deepseek-sdk</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>LLM,AI,DeepSeek,Jev,Decisions,Classification,.NETStandard</PackageTags>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-    <AssemblyVersion>1.0.6.0</AssemblyVersion>
-    <FileVersion>1.0.6.0</FileVersion>
-    <Version>1.0.6</Version>
+    <AssemblyVersion>1.0.7.0</AssemblyVersion>
+    <FileVersion>1.0.7.0</FileVersion>
+    <Version>1.0.7</Version>
     <PackageId>DeepSeek.Decisions</PackageId>
     <AssemblyName>DeepSeek.Decisions</AssemblyName>
     <RootNamespace>DeepSeek.Decisions</RootNamespace>

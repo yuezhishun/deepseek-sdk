@@ -16,7 +16,7 @@ internal static class DeepSeekAnthropicRequestMapper
             Temperature = options?.Temperature,
             TopP = options?.TopP,
             StopSequences = options?.StopSequences?.ToList(),
-            System = options?.Instructions,
+            System = DeepSeekChatRequestMapper.BuildInstructions(options?.Instructions, options?.ResponseFormat as ChatResponseFormatJson),
         };
 
         foreach (var message in messages)

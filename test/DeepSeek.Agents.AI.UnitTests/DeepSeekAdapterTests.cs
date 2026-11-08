@@ -373,12 +373,12 @@ public class DeepSeekAdapterTests
 
         var systemMessage = Assert.Single(request.Messages, static message => message.Role == "system");
         Assert.Contains("Keep the answer concise.", systemMessage.Content!.Text, StringComparison.Ordinal);
-        Assert.Contains("valid json", systemMessage.Content.Text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("single JSON object", systemMessage.Content.Text, StringComparison.Ordinal);
+        Assert.Contains("仅输出一个合法的 JSON 对象。", systemMessage.Content.Text, StringComparison.Ordinal);
+        Assert.Contains("不要添加解释、Markdown 代码块或其他前后缀。", systemMessage.Content.Text, StringComparison.Ordinal);
         Assert.DoesNotContain("EXAMPLE INPUT:", systemMessage.Content.Text, StringComparison.Ordinal);
         Assert.DoesNotContain("JSON OUTPUT:", systemMessage.Content.Text, StringComparison.Ordinal);
         Assert.True(systemMessage.Content.Text!.IndexOf("Keep the answer concise.", StringComparison.Ordinal)
-            < systemMessage.Content.Text.IndexOf("You must reply with valid json.", StringComparison.Ordinal));
+            < systemMessage.Content.Text.IndexOf("仅输出一个合法的 JSON 对象。", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -415,10 +415,10 @@ public class DeepSeekAdapterTests
 
         var systemMessage = Assert.Single(request.Messages, static message => message.Role == "system");
         Assert.Contains("Use only the provided facts.", systemMessage.Content!.Text, StringComparison.Ordinal);
-        Assert.Contains("你必须严格只输出一个合法的 JSON 实例", systemMessage.Content.Text, StringComparison.Ordinal);
-        Assert.Contains("根据它生成一个符合该模式的数据实例", systemMessage.Content.Text, StringComparison.Ordinal);
-        Assert.Contains("以 { 开始", systemMessage.Content.Text, StringComparison.Ordinal);
-        Assert.Contains("以 [ 开始", systemMessage.Content.Text, StringComparison.Ordinal);
+        Assert.Contains("仅输出符合下方 JSON Schema 的 JSON 结果，不要输出 Schema 本身。", systemMessage.Content.Text, StringComparison.Ordinal);
+        Assert.Contains("字段名、类型、必填项、枚举及额外字段限制均以 Schema 为准。", systemMessage.Content.Text, StringComparison.Ordinal);
+        Assert.Contains("字符串内容的语言遵循调用方要求。", systemMessage.Content.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Alice", systemMessage.Content.Text, StringComparison.Ordinal);
         Assert.Contains("\"type\":\"object\"", systemMessage.Content.Text, StringComparison.Ordinal);
         Assert.Contains("\"assistantMessage\"", systemMessage.Content.Text, StringComparison.Ordinal);
         Assert.Contains("\"state\"", systemMessage.Content.Text, StringComparison.Ordinal);

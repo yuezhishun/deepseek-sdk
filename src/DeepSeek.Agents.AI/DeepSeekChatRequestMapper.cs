@@ -1,4 +1,5 @@
 using DeepSeek.Chat;
+using Json.Schema;
 using Microsoft.Extensions.AI;
 using System.Text;
 using System.Text.Encodings.Web;
@@ -16,23 +17,10 @@ namespace DeepSeek.Agents.AI;
 internal static class DeepSeekChatRequestMapper
 {
     internal const string DisableStreamingToolContinuationKey = "deepseek_internal_disable_streaming_tool_continuation";
-    private const string JsonPrompt = 
-@"你必须严格只输出一个合法的 JSON 实例，不要有任何额外的文字说明、标记、前缀或后缀。
-不要使用 Markdown 代码块（如 ```json）包裹。
-响应体必须以 JSON 的第一个字符（{ 或 [）开始，以最后一个字符（} 或 ]）结束。
-JSON 必须语法完全正确：所有键用双引号，不允许尾随逗号，不允许注释，所有双引号、反斜杠和控制字符必须正确转义。
-如果内部需要表示 JSON 字符串，必须使用转义后的双引号。
-
-重要：下面提供了一个 JSON Schema，你必须根据它生成一个符合该模式的数据实例，而不是输出 Schema 本身。
-如果 Schema 的 ""type"" 是 ""object""，就输出一个 JSON 对象（以 { 开始）；如果是 ""array""，就输出一个 JSON 数组（以 [ 开始）。
-
-示例（仅用于说明模式与实例的关系）：
-Schema:
-{""$schema"":""https://json-schema.org/draft/2020-12/schema"",""type"":""object"",""properties"":{""name"":{""type"":""string""},""age"":{""type"":""integer""}}}
-对应的正确输出：
-{""name"":""Alice"",""age"":30}
-
-现在，请根据以下 JSON Schema 以及对话上下文生成所需的数据实例：";
+    private const string JsonPrompt = """
+        不要添加解释、Markdown 代码块或其他前后缀。
+        不要翻译字段名或枚举值；字符串内容的语言遵循调用方要求。
+        """;
     private static readonly JsonSerializerOptions CompactJsonSerializerOptions = new()
     {
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
@@ -149,7 +137,7 @@ Schema:
         return request;
     }
 
-    private static string? BuildInstructions(string? instructions, ChatResponseFormatJson? responseFormat)
+    internal static string? BuildInstructions(string? instructions, ChatResponseFormatJson? responseFormat)
     {
         var augmentation = BuildJsonResponseFormatInstructions(responseFormat);
         if (string.IsNullOrWhiteSpace(augmentation))
@@ -177,20 +165,53 @@ Schema:
 
         if (!hasSchema)
         {
-            return """
-                You must reply with valid json.
-                Return only a single JSON object.
-                Do not wrap the response in Markdown fences.
-                Do not add explanatory text before or after the json object.
-                """;
+            return "仅输出一个合法的 JSON 对象。" + Environment.NewLine + JsonPrompt;
         }
 
         JsonElement schemaElement = responseSchema!.Value;
         return new StringBuilder()
+            .AppendLine("仅输出符合下方 JSON Schema 的 JSON 结果，不要输出 Schema 本身。")
             .AppendLine(JsonPrompt)
+            .AppendLine("字段名、类型、必填项、枚举及额外字段限制均以 Schema 为准。")
+            .AppendLine()
+            .AppendLine("JSON Schema：")
             .AppendLine(SerializeCompactJson(schemaElement))
             .ToString()
             .TrimEnd();
+    }
+
+    internal static void ValidateJsonResponse(string text, ChatOptions? options, object? rawResponse, bool complete, bool hasToolCalls)
+    {
+        if (options?.ResponseFormat is not ChatResponseFormatJson format) return;
+
+        try
+        {
+            if (!complete) throw new JsonException("JSON 响应未完整结束，不能作为完整结果使用。");
+            // Tool turns may legitimately have no text; the final assistant turn must satisfy the format.
+            if (hasToolCalls) return;
+            if (string.IsNullOrWhiteSpace(text)) throw new JsonException("JSON 响应为空或仅包含空白。");
+            using var document = JsonDocument.Parse(text);
+            if (format.Schema is JsonElement schema && schema.ValueKind != JsonValueKind.Undefined)
+            {
+                var validator = JsonSchema.Build(schema, new BuildOptions
+                {
+                    Dialect = Dialect.Draft202012,
+                    SchemaRegistry = new(),
+                });
+                if (!validator.Evaluate(document.RootElement).IsValid)
+                    throw new JsonException("响应 JSON 不符合指定的 JSON Schema。");
+            }
+            else if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                throw new JsonException("普通 JSON 模式要求返回一个 JSON 对象。");
+            }
+        }
+        catch (JsonException exception)
+        {
+            var error = new JsonException(exception.Message, exception);
+            error.Data["RawRepresentation"] = rawResponse;
+            throw error;
+        }
     }
 
     internal static ChatResponse MapToChatResponse(ChatCompletion response)

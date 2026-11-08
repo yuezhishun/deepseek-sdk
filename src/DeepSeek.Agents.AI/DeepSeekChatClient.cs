@@ -37,12 +37,17 @@ public sealed class DeepSeekChatClient : IChatClient
 
     public async Task<ChatResponse> GetResponseAsync(IEnumerable<AiChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
     {
-        var request = DeepSeekChatRequestMapper.MapToChatRequest(messages, MergeOptions(options), stream: false);
+        var merged = MergeOptions(options);
+        var request = DeepSeekChatRequestMapper.MapToChatRequest(messages, merged, stream: false);
         var response = await _client.CompleteChatAsync(request, new System.ClientModel.Primitives.RequestOptions
         {
             CancellationToken = cancellationToken,
         }).ConfigureAwait(false);
-        return DeepSeekChatRequestMapper.MapToChatResponse(response.Value);
+        var result = DeepSeekChatRequestMapper.MapToChatResponse(response.Value);
+        var choice = response.Value.Choices.FirstOrDefault();
+        DeepSeekChatRequestMapper.ValidateJsonResponse(result.Text, merged, response.Value,
+            choice?.FinishReason is "stop" or "tool_calls", choice?.Message?.ToolCalls?.Count > 0);
+        return result;
     }
 
     public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
@@ -63,6 +68,7 @@ public sealed class DeepSeekChatClient : IChatClient
             ChatCompletion? lastChunk = null;
             string? messageId = null;
             TokenUsage? usage = null;
+            string? finishReason = null;
 
             await foreach (var chunk in _client.CompleteChatStreaming(
                 request,
@@ -71,6 +77,7 @@ public sealed class DeepSeekChatClient : IChatClient
                 lastChunk = chunk;
                 messageId ??= chunk.Id ?? Guid.NewGuid().ToString("N");
                 var choice = chunk.Choices.Count > 0 ? chunk.Choices[0] : null;
+                finishReason = choice?.FinishReason ?? finishReason;
                 var delta = choice?.Delta;
                 var reasoningContent = delta?.ReasoningContent;
 
@@ -97,7 +104,7 @@ public sealed class DeepSeekChatClient : IChatClient
                 }
 
                 var content = delta?.Content?.Text;
-                if (content is not null && !string.IsNullOrWhiteSpace(content))
+                if (content is not null && content.Length > 0)
                 {
                     turnState.AppendContent(content);
                     yield return new ChatResponseUpdate(ChatRole.Assistant, content)
@@ -109,6 +116,11 @@ public sealed class DeepSeekChatClient : IChatClient
 
                 usage = chunk.Usage ?? usage;
             }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            var hasToolCalls = turnState.TryBuildToolCalls(out var toolCalls);
+            DeepSeekChatRequestMapper.ValidateJsonResponse(turnState.Content, merged, lastChunk,
+                finishReason is "stop" or "tool_calls", hasToolCalls);
 
             if (usage is not null)
             {
@@ -125,7 +137,7 @@ public sealed class DeepSeekChatClient : IChatClient
                 };
             }
 
-            if (messageId is null || !turnState.TryBuildToolCalls(out var toolCalls))
+            if (messageId is null || !hasToolCalls)
             {
                 yield break;
             }
@@ -320,6 +332,8 @@ public sealed class DeepSeekChatClient : IChatClient
         private readonly Dictionary<int, StreamingToolCallState> _toolCallStates = [];
         private readonly StringBuilder _content = new();
         private readonly StringBuilder _reasoning = new();
+
+        public string Content => _content.ToString();
 
         public void AppendContent(string content) => _content.Append(content);
         public void AppendReasoning(string reasoning) => _reasoning.Append(reasoning);

@@ -35,12 +35,17 @@ public sealed class DeepSeekAnthropicChatClient : IChatClient
 
     public async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
     {
-        var request = DeepSeekAnthropicRequestMapper.MapRequest(messages, MergeOptions(options), stream: false);
+        var merged = MergeOptions(options);
+        var request = DeepSeekAnthropicRequestMapper.MapRequest(messages, merged, stream: false);
         var response = await _client.CreateMessageAsync(request, new System.ClientModel.Primitives.RequestOptions
         {
             CancellationToken = cancellationToken,
         }).ConfigureAwait(false);
-        return DeepSeekAnthropicRequestMapper.MapResponse(response.Value);
+        var result = DeepSeekAnthropicRequestMapper.MapResponse(response.Value);
+        DeepSeekChatRequestMapper.ValidateJsonResponse(result.Text, merged, response.Value,
+            response.Value.StopReason is "end_turn" or "stop_sequence" or "tool_use",
+            response.Value.Content.Any(static block => block.Type == "tool_use"));
+        return result;
     }
 
     public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
@@ -48,7 +53,8 @@ public sealed class DeepSeekAnthropicChatClient : IChatClient
         ChatOptions? options = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        var request = DeepSeekAnthropicRequestMapper.MapRequest(messages, MergeOptions(options), stream: true);
+        var merged = MergeOptions(options);
+        var request = DeepSeekAnthropicRequestMapper.MapRequest(messages, merged, stream: true);
         var blocks = new SortedDictionary<int, AnthropicContentBlock>();
         var arguments = new Dictionary<int, StringBuilder>();
         var active = new HashSet<int>();
@@ -110,7 +116,7 @@ public sealed class DeepSeekAnthropicChatClient : IChatClient
             }
 
             var text = delta?.Text;
-            if (!string.IsNullOrWhiteSpace(text))
+            if (!string.IsNullOrEmpty(text))
             {
                 yield return new ChatResponseUpdate(ChatRole.Assistant, text)
                 {
@@ -154,6 +160,10 @@ public sealed class DeepSeekAnthropicChatClient : IChatClient
                 if (active.Count > 0) throw new InvalidDataException("The Anthropic message ended with incomplete content blocks.");
                 if (blocks.Count > 0) response.Content = blocks.Values.ToList();
                 response.Usage = hasUsage ? usage : null;
+                DeepSeekChatRequestMapper.ValidateJsonResponse(
+                    string.Concat(response.Content.Where(static block => block.Type == "text").Select(static block => block.Text)),
+                    merged, response, response.StopReason is "end_turn" or "stop_sequence" or "tool_use",
+                    response.Content.Any(static block => block.Type == "tool_use"));
                 var update = new ChatResponseUpdate(ChatRole.Assistant, (string?)null)
                 {
                     RawRepresentation = response,

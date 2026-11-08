@@ -10,15 +10,17 @@ internal static class DeepSeekResponsesRequestMapper
 {
     internal static ResponseRequest MapRequest(IEnumerable<ChatMessage> messages, ChatOptions? options, bool stream)
     {
+        var text = MapText(options?.ResponseFormat);
         var request = new ResponseRequest
         {
-            Instructions = options?.Instructions,
+            Instructions = text?.Format?.Type == "json_object"
+                ? DeepSeekChatRequestMapper.BuildInstructions(options?.Instructions, options?.ResponseFormat as ChatResponseFormatJson) : options?.Instructions,
             Temperature = options?.Temperature,
             TopP = options?.TopP,
             MaxOutputTokens = options?.MaxOutputTokens,
             Input = new ResponseInput(MapMessages(messages, options)),
             Reasoning = MapReasoning(options),
-            Text = MapText(options?.ResponseFormat),
+            Text = text,
             Tools = MapTools(options?.Tools),
             ToolChoice = MapToolChoice(options),
             Stream = stream,
@@ -354,7 +356,11 @@ internal static class DeepSeekResponsesRequestMapper
         }
 
         var schema = json.Schema;
-        if (schema is JsonElement schemaElement && schemaElement.ValueKind != JsonValueKind.Undefined)
+        // The native endpoint rejects non-object roots and schema-valued additionalProperties.
+        // Keep the caller's schema intact in the prompt and validate locally for these shapes.
+        if (schema is JsonElement schemaElement && schemaElement.ValueKind == JsonValueKind.Object
+            && schemaElement.TryGetProperty("type", out var type) && type.ValueKind == JsonValueKind.String && type.GetString() == "object"
+            && !HasSchemaValuedAdditionalProperties(schemaElement))
         {
             return new ResponseTextOptions
             {
@@ -372,6 +378,23 @@ internal static class DeepSeekResponsesRequestMapper
         {
             Format = new ResponseTextFormat { Type = "json_object" },
         };
+    }
+
+    private static bool HasSchemaValuedAdditionalProperties(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var property in element.EnumerateObject())
+            {
+                if (property.Name == "additionalProperties" && property.Value.ValueKind == JsonValueKind.Object
+                    || HasSchemaValuedAdditionalProperties(property.Value)) return true;
+            }
+        }
+        else if (element.ValueKind == JsonValueKind.Array)
+        {
+            return element.EnumerateArray().Any(HasSchemaValuedAdditionalProperties);
+        }
+        return false;
     }
 
     private static IList<ResponseTool>? MapTools(IList<AITool>? tools)

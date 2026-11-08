@@ -4,6 +4,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageVersion Include="JsonSchema.Net" Version="8.0.5" />
     <PackageVersion Include="Microsoft.Agents.AI" Version="1.28.0" />
     <PackageVersion Include="Microsoft.Agents.AI.AGUI" Version="1.13.0-preview.260703.1" />
     <PackageVersion Include="Microsoft.Agents.AI.Hosting.AGUI.AspNetCore" Version="1.28.0-preview.261106.1" />
@@ -27,9 +28,9 @@
     <PackageVersion Include="Serilog.Extensions.Logging" Version="10.0.0" />
     <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
-    <PackageVersion Include="DeepSeek.Core" Version="1.0.6" />
-    <PackageVersion Include="DeepSeek.Agents.AI" Version="1.0.6" />
-    <PackageVersion Include="DeepSeek.Decisions" Version="1.0.6" />
+    <PackageVersion Include="DeepSeek.Core" Version="1.0.7" />
+    <PackageVersion Include="DeepSeek.Agents.AI" Version="1.0.7" />
+    <PackageVersion Include="DeepSeek.Decisions" Version="1.0.7" />
     <PackageVersion Include="OpenTelemetry" Version="1.15.3" />
     <PackageVersion Include="OpenTelemetry.Api" Version="1.15.3" />
     <PackageVersion Include="OpenTelemetry.Exporter.Console" Version="1.15.3" />

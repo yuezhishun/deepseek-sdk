@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Text;
 using DeepSeek.Responses;
 using Microsoft.Extensions.AI;
 
@@ -33,12 +34,16 @@ public sealed class DeepSeekResponsesChatClient : IChatClient
 
     public async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
     {
-        var request = DeepSeekResponsesRequestMapper.MapRequest(messages, MergeOptions(options), stream: false);
+        var merged = MergeOptions(options);
+        var request = DeepSeekResponsesRequestMapper.MapRequest(messages, merged, stream: false);
         var response = await _client.CreateResponseAsync(request, new System.ClientModel.Primitives.RequestOptions
         {
             CancellationToken = cancellationToken,
         }).ConfigureAwait(false);
-        return DeepSeekResponsesRequestMapper.MapResponse(response.Value);
+        var result = DeepSeekResponsesRequestMapper.MapResponse(response.Value);
+        DeepSeekChatRequestMapper.ValidateJsonResponse(result.Text, merged, response.Value,
+            response.Value.Status == "completed", response.Value.Output.Any(static item => item.Type is "function_call" or "custom_tool_call"));
+        return result;
     }
 
     public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
@@ -46,9 +51,12 @@ public sealed class DeepSeekResponsesChatClient : IChatClient
         ChatOptions? options = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        var request = DeepSeekResponsesRequestMapper.MapRequest(messages, MergeOptions(options), stream: true);
+        var merged = MergeOptions(options);
+        var request = DeepSeekResponsesRequestMapper.MapRequest(messages, merged, stream: true);
         var functionCalls = new Dictionary<string, ResponseOutputItem>(StringComparer.Ordinal);
         var emittedFunctionCalls = new HashSet<string>(StringComparer.Ordinal);
+        var text = new StringBuilder();
+        var completed = false;
 
         await foreach (var eventData in _client.CreateResponseStreaming(
             request,
@@ -57,6 +65,7 @@ public sealed class DeepSeekResponsesChatClient : IChatClient
             var type = eventData.Type ?? eventData.Event;
             if (type == "response.output_text.delta" && !string.IsNullOrEmpty(eventData.Delta))
             {
+                text.Append(eventData.Delta);
                 yield return DeepSeekResponsesRequestMapper.MapTextUpdate(eventData, eventData.Delta!);
                 continue;
             }
@@ -128,12 +137,20 @@ public sealed class DeepSeekResponsesChatClient : IChatClient
 
             if (type is "response.completed" or "response.incomplete" or "response.failed")
             {
+                var response = eventData.Response;
+                DeepSeekChatRequestMapper.ValidateJsonResponse(text.ToString(), merged, response ?? (object)eventData,
+                    type == "response.completed" && response?.Status == "completed",
+                    response?.Output.Any(static item => item.Type is "function_call" or "custom_tool_call") == true);
+                completed = true;
                 yield return DeepSeekResponsesRequestMapper.MapFinalUpdate(eventData);
                 continue;
             }
 
             yield return DeepSeekResponsesRequestMapper.MapRawEvent(eventData);
         }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!completed) DeepSeekChatRequestMapper.ValidateJsonResponse(text.ToString(), merged, null, complete: false, hasToolCalls: false);
     }
 
     public void Dispose()

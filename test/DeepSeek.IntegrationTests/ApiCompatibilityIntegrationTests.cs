@@ -196,7 +196,7 @@ public sealed class ApiCompatibilityIntegrationTests(DeepSeekIntegrationFixture 
     [LiveFact]
     public async Task JsonOutput_ProducesParseableObjectsAndSchemaFieldsOnSupportedProtocols()
     {
-        foreach (var protocol in new[] { "chat", "responses" })
+        foreach (var protocol in new[] { "chat", "anthropic", "responses" })
         {
             foreach (var schema in new[] { false, true })
             {
@@ -210,6 +210,42 @@ public sealed class ApiCompatibilityIntegrationTests(DeepSeekIntegrationFixture 
                 Assert.Equal("ok", document.RootElement.GetProperty("state").GetProperty("stage").GetString());
                 Assert.Equal("ok", document.RootElement.GetProperty("assistantMessage").GetString());
             }
+        }
+    }
+
+    [LiveFact]
+    public async Task JsonOutput_StreamingPreservesStringContentsAcrossAllProtocolsAndBothModels()
+    {
+        foreach (var model in new[] { DeepSeekTestModels.FlashModel, DeepSeekTestModels.ProModel })
+        foreach (var protocol in new[] { "chat", "anthropic", "responses" })
+        foreach (var schema in new[] { false, true })
+        {
+            var options = Options();
+            options.Instructions = "字符串内容使用英语，原样保留输入内容。";
+            options.ResponseFormat = schema ? ChatResponseFormat.ForJsonSchema<Dictionary<string, string>>() : ChatResponseFormat.Json;
+            var response = await CreateAdapter(protocol, model).GetStreamingResponseAsync(
+                [new AiMessage(ChatRole.User, "只返回这个 JSON 对象：{\"message\":\"hello world 中文 😀\\n\\\"quoted\\\"\"}")], options, fixture.CreateToken()).ToChatResponseAsync();
+            using var document = System.Text.Json.JsonDocument.Parse(response.Text);
+            Assert.Equal("hello world 中文 😀\n\"quoted\"", document.RootElement.GetProperty("message").GetString());
+            Assert.True(response.Usage?.TotalTokenCount > 0);
+        }
+    }
+
+    [LiveFact]
+    public async Task JsonSchema_ArrayRootWorksInStreamingAndNonStreamingAcrossAllProtocols()
+    {
+        foreach (var protocol in new[] { "chat", "anthropic", "responses" })
+        foreach (var stream in new[] { false, true })
+        {
+            var options = Options();
+            options.ResponseFormat = ChatResponseFormat.ForJsonSchema<int[]>();
+            var messages = new[] { new AiMessage(ChatRole.User, "仅返回 JSON 数组 [1,2,3]，不要包装为对象。") };
+            var client = CreateAdapter(protocol);
+            var response = stream
+                ? await client.GetStreamingResponseAsync(messages, options, fixture.CreateToken()).ToChatResponseAsync()
+                : await client.GetResponseAsync(messages, options, fixture.CreateToken());
+            using var document = System.Text.Json.JsonDocument.Parse(response.Text);
+            Assert.Equal(new[] { 1, 2, 3 }, document.RootElement.EnumerateArray().Select(x => x.GetInt32()));
         }
     }
 
