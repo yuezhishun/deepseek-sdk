@@ -88,7 +88,7 @@ $env:DEEPSEEK_REQUIRE_LIVE_TESTS = 'true'
 dotnet test test/DeepSeek.IntegrationTests/DeepSeek.IntegrationTests.csproj -c Release -p:CompatibilityTargetFramework=net11.0
 ```
 
-在线凭据来自本地 `sample/appsettings.json`。未配置时显示 xUnit 跳过；完整验收设置上述环境变量，缺少凭据直接失败。在线测试串行运行，只清理本轮创建的文件，不运行 benchmark。
+在线凭据优先来自环境变量 `DEEPSEEK_API_KEY`，其次为 `deepseek-api-key`，最后回退到本地 `sample/appsettings.json`。开发环境未配置时显示 xUnit 跳过；完整验收设置上述环境变量，缺少凭据直接失败。在线测试串行运行，只清理本轮创建的文件，不运行 benchmark。
 
 ### Microsoft AI 兼容版本
 
@@ -518,6 +518,10 @@ NuGet 策略应绑定以下值：
 - 包范围：`DeepSeek.Core`、`DeepSeek.Agents.AI`、`DeepSeek.Decisions`。
 
 新策略可能显示 7 天临时激活窗口；窗口内首次成功发布后会永久激活。CI 每次发布自动取得短期密钥，无需手动复制密钥或定期更新仓库 Secret。
+
+发布 CI 必须另行配置仓库 Secret `DEEPSEEK_API_KEY`，仅在测试步骤映射为同名环境变量；`DEEPSEEK_REQUIRE_LIVE_TESTS=true` 确保缺少凭据时失败，在线测试不会被静默跳过。密钥不写入仓库或输出日志。
+
+手动运行 `publish-nuget.yml` 会执行完整测试、三个包的打包和文件校验，版本来自三个项目一致的 `Version`；NuGet 登录与上传仅在 `v*` tag push 时执行。这样可以验证 CI 修复，并保持已发布 tag 的提交不变。工作流使用 `actions/setup-dotnet@v6.1.0`，替换旧版的 Node `punycode` 弃用依赖链。
 
 ## 说明
 

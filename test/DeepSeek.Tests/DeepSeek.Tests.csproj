@@ -21,6 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\TestApiKeyProvider.cs" Link="TestApiKeyProvider.cs" />
     <ProjectReference Include="..\..\src\DeepSeek.Core\DeepSeek.Core.csproj" />
   </ItemGroup>
 </Project>

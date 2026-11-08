@@ -5,6 +5,20 @@ namespace TestSupport;
 internal static class TestApiKeyProvider
 {
     public static string? GetApiKey()
+        => GetApiKey(Environment.GetEnvironmentVariable, GetFileApiKey);
+
+    internal static string? GetApiKey(Func<string, string?> readEnvironment, Func<string?> readFile)
+    {
+        var key = readEnvironment("DEEPSEEK_API_KEY");
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            key = readEnvironment("deepseek-api-key");
+        }
+
+        return string.IsNullOrWhiteSpace(key) ? readFile() : key.Trim();
+    }
+
+    private static string? GetFileApiKey()
     {
         var appSettingsPath = FindSampleAppSettingsPath();
         if (appSettingsPath is null || !File.Exists(appSettingsPath))

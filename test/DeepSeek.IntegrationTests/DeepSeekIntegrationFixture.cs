@@ -18,7 +18,7 @@ public sealed class DeepSeekIntegrationFixture : IDisposable
         if (Environment.GetEnvironmentVariable("DEEPSEEK_REQUIRE_LIVE_TESTS") == "true"
             && (string.IsNullOrWhiteSpace(ApiKey) || ApiKey == "test-key"))
         {
-            throw new InvalidOperationException("完整在线验收需要有效的 sample/appsettings.json API Key。");
+            throw new InvalidOperationException("完整在线验收需要有效的 DEEPSEEK_API_KEY、deepseek-api-key 或 sample/appsettings.json API Key。");
         }
         Client = new DeepSeekClient(ApiKey);
         ChatClient = Client.GetChatClient(DeepSeekTestModels.FlashModel);

@@ -24,7 +24,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6.1.0
         with:
           dotnet-version: |
             8.0.x
@@ -34,7 +34,15 @@ jobs:
         run: dotnet restore DeepSeek.slnx
 
       - name: Test
-        run: dotnet test DeepSeek.slnx --configuration "$CONFIGURATION" --no-restore
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DEEPSEEK_REQUIRE_LIVE_TESTS: "true"
+        run: |
+          if [[ -z "$DEEPSEEK_API_KEY" || "$DEEPSEEK_API_KEY" == "test-key" ]]; then
+            echo "::error::Repository secret DEEPSEEK_API_KEY must contain a valid online-test credential."
+            exit 1
+          fi
+          dotnet test DeepSeek.slnx --configuration "$CONFIGURATION" --no-restore
 
       - name: Resolve package version
         shell: pwsh
@@ -42,13 +50,22 @@ jobs:
           $ref = "${{ github.ref }}"
           $refName = "${{ github.ref_name }}"
 
-          if (-not $ref.StartsWith("refs/tags/v")) {
-            throw "NuGet publish must be run from a version tag like 'v1.0.2'. Current ref: '$ref' (ref_name: '$refName')."
+          if ("${{ github.event_name }}" -eq "push" -and $ref.StartsWith("refs/tags/v")) {
+            $version = $refName.Substring(1)
           }
-
-          $version = $refName
-          if ($version.StartsWith("v")) {
-            $version = $version.Substring(1)
+          elseif ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $projects = @("DeepSeek.Core", "DeepSeek.Agents.AI", "DeepSeek.Decisions")
+            $versions = @($projects | ForEach-Object {
+              ([xml](Get-Content -Raw "src/$_/$_.csproj")).Project.PropertyGroup.Version
+            } | Select-Object -Unique)
+            if ($versions.Count -ne 1) {
+              throw "Manual verification requires all package projects to have the same version."
+            }
+            $version = $versions[0]
+            Write-Host "Manual verification runs tests and packaging; NuGet publishing requires a v* tag push."
+          }
+          else {
+            throw "NuGet publish requires a version tag push. Current ref: '$ref'."
           }
           if ([string]::IsNullOrWhiteSpace($version)) {
             throw "Unable to resolve package version from ref '$ref' (ref_name: '$refName')."
@@ -94,12 +111,14 @@ jobs:
           Write-Host " - $decisionsPackage"
 
       - name: NuGet login with trusted publishing
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         uses: NuGet/login@v1
         id: nuget-login
         with:
           user: yueyuan
 
       - name: Publish DeepSeek.Core
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         env:
           NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
@@ -111,6 +130,7 @@ jobs:
             --no-symbols
 
       - name: Publish DeepSeek.Agents.AI
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         env:
           NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
@@ -122,6 +142,7 @@ jobs:
             --no-symbols
 
       - name: Publish DeepSeek.Decisions
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         env:
           NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}

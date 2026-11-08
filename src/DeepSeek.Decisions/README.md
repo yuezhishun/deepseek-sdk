@@ -216,6 +216,6 @@ dotnet test test/DeepSeek.IntegrationTests/DeepSeek.IntegrationTests.csproj -c R
 dotnet pack src/DeepSeek.Decisions/DeepSeek.Decisions.csproj -c Release
 ```
 
-在线用例沿用 `LiveFact`，从本地 `sample/appsettings.json` 读取 API Key；缺少凭据时跳过。设置 `DEEPSEEK_REQUIRE_LIVE_TESTS=true` 可要求缺少凭据时直接失败。
+在线用例沿用 `LiveFact`，优先读取 `DEEPSEEK_API_KEY`，其次为 `deepseek-api-key`，最后回退到本地 `sample/appsettings.json`；开发环境缺少凭据时跳过。发布 CI 通过仓库 Secret `DEEPSEEK_API_KEY` 提供凭据，并设置 `DEEPSEEK_REQUIRE_LIVE_TESTS=true`，缺少凭据直接失败。
 
 算法与协议参考：[jevper 0.7.12 / 4fdc054](https://github.com/zhulinchng/jevper/tree/4fdc054082e6328f2d42bc3750d7ebbf9380d3b4)、[Decisions API](https://developers.openai.com/api/docs/guides/decisions)、[Jev 图片](https://docs.typesafe.ai/images)、[Confidence 公式](https://docs.typesafe.ai/confidence)。本包是独立实现，不隶属于 OpenAI 或 TypeSafe。
