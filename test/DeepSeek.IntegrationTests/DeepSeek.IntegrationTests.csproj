@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework Condition="'$(CompatibilityTargetFramework)' == ''">net10.0</TargetFramework>
+    <TargetFramework Condition="'$(CompatibilityTargetFramework)' != ''">$(CompatibilityTargetFramework)</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
@@ -9,13 +10,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Agents.AI" Version="1.9.0" />
-    <PackageReference Include="Microsoft.Extensions.AI" Version="10.6.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.1" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="9.0.1" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
-    <PackageReference Include="xunit" Version="2.9.2" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+    <PackageReference Include="Microsoft.Agents.AI" />
+    <PackageReference Include="Microsoft.Agents.AI.Hosting.AGUI.AspNetCore" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+    <PackageReference Include="Microsoft.Extensions.AI" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
@@ -24,11 +27,16 @@
   <ItemGroup>
     <Compile Include="..\DeepSeekTestModels.cs" Link="DeepSeekTestModels.cs" />
     <Compile Include="..\TestApiKeyProvider.cs" Link="TestApiKeyProvider.cs" />
-    <Content Include="..\..\sample\appsettings.dev.json" Link="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\sample\appsettings.json" Link="appsettings.json" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\sample\appsettings.json')" />
+    <Content Include="..\..\sample\appsettings.dev.json" Link="appsettings.json" CopyToOutputDirectory="PreserveNewest" Condition="!Exists('..\..\sample\appsettings.json')" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\DeepSeek.Core\DeepSeek.Core.csproj" />
     <ProjectReference Include="..\..\src\DeepSeek.Agents.AI\DeepSeek.Agents.AI.csproj" />
   </ItemGroup>
+
+  <Target Name="RemoveStaleLocalAppSettings" BeforeTargets="_CopyOutOfDateSourceItemsToOutputDirectory" Condition="!Exists('..\..\sample\appsettings.json')">
+    <Delete Files="$(TargetDir)appsettings.json" />
+  </Target>
 </Project>

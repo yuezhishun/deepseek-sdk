@@ -1,11 +1,14 @@
 <Solution>
+  <File Path="Directory.Packages.props" />
   <Folder Name="/sample/">
-    <File Path="sample/Directory.Packages.props" />
     <Project Path="sample/AGUIDojoServer/AGUIDojoServer.csproj" />
     <Project Path="sample/DeepSeek.Agui.Agent/DeepSeek.Agui.Agent.csproj" />
     <Project Path="sample/DeepSeek.Agui.Console/DeepSeek.Agui.Console.csproj" />
     <Project Path="sample/DeepSeek.Agui.CustomClient/DeepSeek.Agui.CustomClient.csproj" />
     <Project Path="sample/DeepSeek.Sample/DeepSeek.Sample.csproj" />
+  </Folder>
+  <Folder Name="/benchmark/">
+    <Project Path="benchmark/DeepSeek.Responses.SweBench/DeepSeek.Responses.SweBench.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/DeepSeek.Agents.AI/DeepSeek.Agents.AI.csproj" />

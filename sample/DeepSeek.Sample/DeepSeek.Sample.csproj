@@ -6,6 +6,7 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<UserSecretsId>e1065991-095b-47fe-8e75-38e70eba6243</UserSecretsId>
+		<UsePublishedDeepSeekPackages Condition="'$(UsePublishedDeepSeekPackages)' == ''">false</UsePublishedDeepSeekPackages>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -16,15 +17,17 @@
 		<PackageReference Include="Serilog.Extensions.Logging" />
 		<PackageReference Include="Serilog.Sinks.Console" />
 		<PackageReference Include="Serilog.Sinks.File" />
-		<PackageReference Include="DeepSeek.Core"/>
+	</ItemGroup>
+	<ItemGroup Condition="'$(UsePublishedDeepSeekPackages)' == 'true'">
+		<PackageReference Include="DeepSeek.Core" />
 		<PackageReference Include="DeepSeek.Agents.AI" />
 	</ItemGroup>
 	<ItemGroup>
 		<Content Include="..\appsettings.dev.json" Link="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
 	</ItemGroup>
-	<!--<ItemGroup>
+	<ItemGroup Condition="'$(UsePublishedDeepSeekPackages)' != 'true'">
 		<ProjectReference Include="..\..\src\DeepSeek.Agents.AI\DeepSeek.Agents.AI.csproj" />
 		<ProjectReference Include="..\..\src\DeepSeek.Core\DeepSeek.Core.csproj" />
-	</ItemGroup>-->
+	</ItemGroup>
 
 </Project>

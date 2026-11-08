@@ -58,9 +58,11 @@ public sealed class DeepSeekChatClient : IChatClient
         while (true)
         {
             var request = DeepSeekChatRequestMapper.MapToChatRequest(conversation, merged, stream: true);
+            request.StreamOptions ??= new StreamOptions { IncludeUsage = true };
             var turnState = new StreamingAssistantTurnState();
             ChatCompletion? lastChunk = null;
             string? messageId = null;
+            TokenUsage? usage = null;
 
             await foreach (var chunk in _client.CompleteChatStreaming(
                 request,
@@ -94,7 +96,7 @@ public sealed class DeepSeekChatClient : IChatClient
                     turnState.ApplyToolCalls(deltaToolCalls);
                 }
 
-                var content = delta?.Content;
+                var content = delta?.Content?.Text;
                 if (content is not null && !string.IsNullOrWhiteSpace(content))
                 {
                     turnState.AppendContent(content);
@@ -105,20 +107,22 @@ public sealed class DeepSeekChatClient : IChatClient
                     };
                 }
 
-                if (chunk.Usage is not null && chunk.Choices.Count == 0)
+                usage = chunk.Usage ?? usage;
+            }
+
+            if (usage is not null)
+            {
+                yield return new ChatResponseUpdate(ChatRole.Assistant, [new UsageContent(DeepSeekChatRequestMapper.MapUsage(usage))])
                 {
-                    yield return new ChatResponseUpdate(ChatRole.Assistant, (string?)null)
+                    RawRepresentation = lastChunk,
+                    MessageId = messageId,
+                    AdditionalProperties = new AdditionalPropertiesDictionary
                     {
-                        RawRepresentation = chunk,
-                        MessageId = messageId,
-                        AdditionalProperties = new AdditionalPropertiesDictionary
-                        {
-                            ["usage_total_tokens"] = chunk.Usage.TotalTokens,
-                            ["usage_prompt_tokens"] = chunk.Usage.PromptTokens,
-                            ["usage_completion_tokens"] = chunk.Usage.CompletionTokens,
-                        },
-                    };
-                }
+                        ["usage_total_tokens"] = usage.TotalTokens,
+                        ["usage_prompt_tokens"] = usage.PromptTokens,
+                        ["usage_completion_tokens"] = usage.CompletionTokens,
+                    },
+                };
             }
 
             if (messageId is null || !turnState.TryBuildToolCalls(out var toolCalls))

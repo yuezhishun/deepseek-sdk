@@ -8,7 +8,10 @@ namespace DeepSeek.Anthropic;
 public sealed class AnthropicClient
 {
     private const string Path = "/anthropic/v1/messages";
-    private static readonly HashSet<string> SupportedInputBlockTypes = ["text", "thinking", "tool_use", "tool_result"];
+    private static readonly HashSet<string> SupportedInputBlockTypes =
+    [
+        "text", "thinking", "image", "tool_use", "tool_result", "server_tool_use", "web_search_tool_result",
+    ];
     private readonly ClientPipeline _pipeline;
     private readonly Uri _endpoint;
 
@@ -51,7 +54,7 @@ public sealed class AnthropicClient
             "POST",
             request,
             DeepSeekProtocol.GetBufferedRequestOptions(options, nameof(CreateMessageAsync)),
-            headers: new Dictionary<string, string> { ["anthropic-version"] = "2023-06-01" });
+            headers: CreateHeaders(request));
         return DeepSeekProtocol.Send(_pipeline, message, uri);
     }
 
@@ -68,7 +71,7 @@ public sealed class AnthropicClient
             "POST",
             request,
             DeepSeekProtocol.GetBufferedRequestOptions(options, nameof(CreateMessageAsync)),
-            headers: new Dictionary<string, string> { ["anthropic-version"] = "2023-06-01" });
+            headers: CreateHeaders(request));
         return DeepSeekProtocol.SendAsync(_pipeline, message, uri);
     }
 
@@ -86,7 +89,7 @@ public sealed class AnthropicClient
         ValidateRequest(request);
         return new DelegateAsyncCollectionResult<AnthropicStreamEvent>(
             ct => SendStreamingRequestAsync(request, options, ct),
-            (response, ct) => DeepSeekStreaming.ReadServerSentEventsAsync<AnthropicStreamEvent>(response, ct));
+            (response, ct) => DeepSeekStreaming.ReadServerSentEventsAsync<AnthropicStreamEvent>(response, ct), options?.CancellationToken ?? CancellationToken.None);
     }
 
     private async Task<ClientResult> SendStreamingRequestAsync(AnthropicMessageRequest request, RequestOptions? options, CancellationToken cancellationToken)
@@ -100,7 +103,7 @@ public sealed class AnthropicClient
             request,
             requestOptions,
             streamResponse: true,
-            headers: new Dictionary<string, string> { ["anthropic-version"] = "2023-06-01" });
+            headers: CreateHeaders(request));
         return await DeepSeekProtocol.SendAsync(_pipeline, message, uri).ConfigureAwait(false);
     }
 
@@ -116,6 +119,38 @@ public sealed class AnthropicClient
                 }
             }
         }
+    }
+
+    private static Dictionary<string, string> CreateHeaders(AnthropicMessageRequest request)
+    {
+        var headers = new Dictionary<string, string>
+        {
+            ["anthropic-version"] = "2023-06-01",
+        };
+
+        if (request.Messages.Any(static message => message.Content.Any(static block =>
+            (block.Type == "image" && block.Source?.Type == "file") || ContainsFileImage(block.Content))))
+        {
+            headers["anthropic-beta"] = "files-api-2025-04-14";
+        }
+
+        return headers;
+    }
+
+    private static bool ContainsFileImage(JsonNode? node)
+    {
+        if (node is JsonObject obj)
+        {
+            if (obj["type"]?.GetValue<string>() == "image"
+                && obj["source"] is JsonObject source && source["type"]?.GetValue<string>() == "file")
+            {
+                return true;
+            }
+
+            return obj.Any(static property => ContainsFileImage(property.Value));
+        }
+
+        return node is JsonArray array && array.Any(static item => ContainsFileImage(item));
     }
 }
 
@@ -133,6 +168,12 @@ public sealed class AnthropicMessageRequest
     public AnthropicOutputConfig? OutputConfig { get; set; }
     public IList<AnthropicTool>? Tools { get; set; }
     public object? ToolChoice { get; set; }
+
+    /// <summary>Anthropic metadata. DeepSeek uses only <see cref="AnthropicMetadata.UserId"/>.</summary>
+    public AnthropicMetadata? Metadata { get; set; }
+
+    /// <summary>Preserves fields from newer Anthropic request schemas.</summary>
+    [System.Text.Json.Serialization.JsonExtensionData]
     public IDictionary<string, JsonElement>? AdditionalData { get; set; }
 }
 
@@ -140,42 +181,82 @@ public sealed class AnthropicMessage
 {
     public string Role { get; set; } = "user";
     public IList<AnthropicContentBlock> Content { get; set; } = [];
+
+    [System.Text.Json.Serialization.JsonExtensionData]
+    public IDictionary<string, JsonElement>? AdditionalData { get; set; }
 }
 
 public sealed class AnthropicContentBlock
 {
     public string Type { get; set; } = "text";
     public string? Text { get; set; }
+    public AnthropicImageSource? Source { get; set; }
     public string? Thinking { get; set; }
     public string? Signature { get; set; }
+    public string? PartialJson { get; set; }
     public string? Id { get; set; }
     public string? Name { get; set; }
     public JsonNode? Input { get; set; }
     public string? ToolUseId { get; set; }
     public JsonNode? Content { get; set; }
+    public string? StopReason { get; set; }
+    public string? StopSequence { get; set; }
+    public AnthropicUsage? Usage { get; set; }
+
+    [System.Text.Json.Serialization.JsonExtensionData]
+    public IDictionary<string, JsonElement>? AdditionalData { get; set; }
+}
+
+/// <summary>Source for an Anthropic image content block.</summary>
+public sealed class AnthropicImageSource
+{
+    public string Type { get; set; } = "base64";
+    public string? MediaType { get; set; }
+    public string? Data { get; set; }
+    public string? Url { get; set; }
+    public string? FileId { get; set; }
+
+    [System.Text.Json.Serialization.JsonExtensionData]
+    public IDictionary<string, JsonElement>? AdditionalData { get; set; }
 }
 
 public sealed class AnthropicThinkingConfig
 {
     public string Type { get; set; } = "enabled";
+    public long? BudgetTokens { get; set; }
+
+    [System.Text.Json.Serialization.JsonExtensionData]
+    public IDictionary<string, JsonElement>? AdditionalData { get; set; }
 }
 
 public sealed class AnthropicOutputConfig
 {
     public string? Effort { get; set; }
+
+    [System.Text.Json.Serialization.JsonExtensionData]
+    public IDictionary<string, JsonElement>? AdditionalData { get; set; }
 }
 
 public sealed class AnthropicTool
 {
+    public string? Type { get; set; }
+    public int? MaxUses { get; set; }
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
     public JsonNode InputSchema { get; set; } = new JsonObject();
+
+    [System.Text.Json.Serialization.JsonExtensionData]
+    public IDictionary<string, JsonElement>? AdditionalData { get; set; }
 }
 
 public sealed class AnthropicToolChoice
 {
     public string Type { get; set; } = "auto";
     public string? Name { get; set; }
+    public bool? DisableParallelToolUse { get; set; }
+
+    [System.Text.Json.Serialization.JsonExtensionData]
+    public IDictionary<string, JsonElement>? AdditionalData { get; set; }
 }
 
 public sealed class AnthropicMessageResponse
@@ -188,6 +269,9 @@ public sealed class AnthropicMessageResponse
     public string? StopSequence { get; set; }
     public IList<AnthropicContentBlock> Content { get; set; } = [];
     public AnthropicUsage? Usage { get; set; }
+
+    [System.Text.Json.Serialization.JsonExtensionData]
+    public IDictionary<string, JsonElement>? AdditionalData { get; set; }
 }
 
 public sealed class AnthropicUsage
@@ -196,6 +280,10 @@ public sealed class AnthropicUsage
     public int? OutputTokens { get; set; }
     public int? CacheCreationInputTokens { get; set; }
     public int? CacheReadInputTokens { get; set; }
+    public IDictionary<string, long>? ServerToolUse { get; set; }
+
+    [System.Text.Json.Serialization.JsonExtensionData]
+    public IDictionary<string, JsonElement>? AdditionalData { get; set; }
 }
 
 public sealed class AnthropicStreamEvent
@@ -206,4 +294,15 @@ public sealed class AnthropicStreamEvent
     public AnthropicContentBlock? ContentBlock { get; set; }
     public int? Index { get; set; }
     public AnthropicUsage? Usage { get; set; }
+
+    [System.Text.Json.Serialization.JsonExtensionData]
+    public IDictionary<string, JsonElement>? AdditionalData { get; set; }
+}
+
+public sealed class AnthropicMetadata
+{
+    public string? UserId { get; set; }
+
+    [System.Text.Json.Serialization.JsonExtensionData]
+    public IDictionary<string, JsonElement>? AdditionalData { get; set; }
 }

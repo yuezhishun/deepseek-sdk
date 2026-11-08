@@ -1,4 +1,5 @@
 using DeepSeek.Anthropic;
+using DeepSeek.Responses;
 using DeepSeek.Chat;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
@@ -19,6 +20,12 @@ public static class DeepSeekChatClientExtensions
     {
         _ = client ?? throw new ArgumentNullException(nameof(client));
         return new DeepSeekAnthropicChatClient(client, options);
+    }
+
+    public static IChatClient AsIChatClient(this ResponsesClient client, DeepSeekChatClientOptions? options = null)
+    {
+        _ = client ?? throw new ArgumentNullException(nameof(client));
+        return new DeepSeekResponsesChatClient(client, options);
     }
 
     public static ChatClientAgent AsAIAgent(
@@ -56,6 +63,29 @@ public static class DeepSeekChatClientExtensions
         return new ChatClientAgent(ResolveChatClient(client.AsIChatClient(), clientFactory), NormalizeOptions(options), loggerFactory, services);
     }
 
+    public static ChatClientAgent AsAIAgent(
+        this ResponsesClient client,
+        string? instructions = null,
+        string? name = null,
+        string? description = null,
+        IList<AITool>? tools = null,
+        Func<IChatClient, IChatClient>? clientFactory = null,
+        ILoggerFactory? loggerFactory = null,
+        IServiceProvider? services = null)
+        => client.AsAIAgent(CreateOptions(instructions, name, description, tools), clientFactory, loggerFactory, services);
+
+    public static ChatClientAgent AsAIAgent(
+        this ResponsesClient client,
+        ChatClientAgentOptions options,
+        Func<IChatClient, IChatClient>? clientFactory = null,
+        ILoggerFactory? loggerFactory = null,
+        IServiceProvider? services = null)
+    {
+        _ = client ?? throw new ArgumentNullException(nameof(client));
+        _ = options ?? throw new ArgumentNullException(nameof(options));
+        return new ChatClientAgent(ResolveChatClient(client.AsIChatClient(), clientFactory), NormalizeResponsesOptions(options), loggerFactory, services);
+    }
+
     internal static ChatClientAgentOptions CreateOptions(string? instructions, string? name, string? description, IList<AITool>? tools)
     {
         return new ChatClientAgentOptions
@@ -84,6 +114,18 @@ public static class DeepSeekChatClientExtensions
                 {
                     [DeepSeekChatRequestMapper.DisableStreamingToolContinuationKey] = true,
                 });
+        }
+
+        return normalized;
+    }
+
+    internal static ChatClientAgentOptions NormalizeResponsesOptions(ChatClientAgentOptions options)
+    {
+        var normalized = options.Clone();
+        if (!normalized.UseProvidedChatClientAsIs)
+        {
+            normalized.RequirePerServiceCallChatHistoryPersistence = true;
+            normalized.ChatOptions ??= new ChatOptions();
         }
 
         return normalized;

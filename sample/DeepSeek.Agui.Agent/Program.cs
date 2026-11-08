@@ -21,7 +21,7 @@ var loggerFactory = LoggerFactory.Create(builder =>
         .CreateLogger();
     builder.AddSerilog(); 
 });
-builder.Services.AddAGUI();
+builder.Services.AddAGUIServer();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(AguiCorsPolicy, policy =>
@@ -49,7 +49,7 @@ if (string.IsNullOrWhiteSpace(apiKey))
     throw new InvalidOperationException("Configuration value 'apiKey' is required.");
 }
 
-var model = app.Configuration["DeepSeek:Model"] ?? "deepseek-v4-flash";
+var model = app.Configuration["DeepSeek:Model"] ?? app.Configuration["Model"] ?? "deepseek-flash";
 var loggingSection = app.Configuration.GetSection("DeepSeek:Logging");
 var enablePipelineLogging = loggingSection.GetValue<bool>("Enabled");
 var enableDistributedTracing = loggingSection.GetValue<bool>("EnableDistributedTracing");
@@ -71,7 +71,7 @@ var chatClient = new DeepSeekClient(apiKey, clientOptions).GetChatClient(model);
 var Agent = chatClient.AsAIAgent(
     name: "DeepSeekAgUiHostedAgent",
     instructions: "You are a concise AG-UI demo assistant.");
-app.MapAGUI("/agui", Agent);
+app.MapAGUIServer("/agui", Agent);
 
 
 app.Run();

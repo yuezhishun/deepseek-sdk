@@ -20,7 +20,7 @@ internal static class ChatClientAgentFactory
 
     public static void Initialize(IConfiguration configuration, ILoggerFactory loggerFactory)
     {
-        s_modelName = configuration["DeepSeek:Model"] ?? "deepseek-v4-flash";
+        s_modelName = configuration["DeepSeek:Model"] ?? configuration["Model"] ?? "deepseek-flash";
         var apiKey = configuration["apiKey"];
         if (string.IsNullOrWhiteSpace(apiKey))
         {

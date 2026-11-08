@@ -3,6 +3,7 @@ using DeepSeek.Billing;
 using DeepSeek.Chat;
 using DeepSeek.Completions;
 using DeepSeek.Models;
+using DeepSeek.Responses;
 using Microsoft.Extensions.AI;
 using DeepSeek.Agents.AI;
 using TestSupport;
@@ -14,14 +15,22 @@ public sealed class DeepSeekIntegrationFixture : IDisposable
     public DeepSeekIntegrationFixture()
     {
         ApiKey = TestApiKeyProvider.GetApiKeyOrFallback();
+        if (Environment.GetEnvironmentVariable("DEEPSEEK_REQUIRE_LIVE_TESTS") == "true"
+            && (string.IsNullOrWhiteSpace(ApiKey) || ApiKey == "test-key"))
+        {
+            throw new InvalidOperationException("完整在线验收需要有效的 sample/appsettings.json API Key。");
+        }
         Client = new DeepSeekClient(ApiKey);
         ChatClient = Client.GetChatClient(DeepSeekTestModels.FlashModel);
         CompletionsClient = Client.GetCompletionsClient(DeepSeekTestModels.ProModel);
         ModelsClient = Client.GetModelsClient();
         BalanceClient = Client.GetBalanceClient();
         AnthropicClient = Client.GetAnthropicClient(DeepSeekTestModels.FlashModel);
+        ResponsesClient = Client.GetResponsesClient(DeepSeekTestModels.FlashModel);
+        ResponsesProClient = Client.GetResponsesClient(DeepSeekTestModels.ProModel);
         OpenAiChatClient = ChatClient.AsIChatClient();
         AnthropicChatClient = AnthropicClient.AsIChatClient();
+        ResponsesChatClient = ResponsesClient.AsIChatClient();
     }
 
     public string ApiKey { get; }
@@ -38,9 +47,15 @@ public sealed class DeepSeekIntegrationFixture : IDisposable
 
     public AnthropicClient AnthropicClient { get; }
 
+    public ResponsesClient ResponsesClient { get; }
+
+    public ResponsesClient ResponsesProClient { get; }
+
     public IChatClient OpenAiChatClient { get; }
 
     public IChatClient AnthropicChatClient { get; }
+
+    public IChatClient ResponsesChatClient { get; }
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(ApiKey) && !string.Equals(ApiKey, "test-key", StringComparison.Ordinal);
 

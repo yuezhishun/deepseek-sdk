@@ -23,6 +23,6 @@ public sealed class ChatCompletionRequest
     public bool? Logprobs { get; set; }
     public int? TopLogprobs { get; set; }
 
-    [JsonPropertyName("user")]
+    [JsonPropertyName("user_id")]
     public string? UserId { get; set; }
 }

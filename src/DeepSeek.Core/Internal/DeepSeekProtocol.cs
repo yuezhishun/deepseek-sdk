@@ -24,7 +24,8 @@ internal static class DeepSeekProtocol
         var message = pipeline.CreateMessage(uri, method, PipelineMessageClassifier.Default);
         if (content is not null)
         {
-            message.Request.Content = BinaryContent.CreateJson(content, DeepSeekJson.SerializerOptions);
+            var json = JsonSerializer.Serialize(content, content.GetType(), DeepSeekJson.SerializerOptions);
+            message.Request.Content = BinaryContent.CreateJson(json, validate: false);
             message.Request.Headers.Set("Content-Type", "application/json");
         }
 

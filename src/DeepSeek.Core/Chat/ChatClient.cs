@@ -101,7 +101,7 @@ public class ChatClient
 
         return new DelegateAsyncCollectionResult<ChatCompletion>(
             ct => SendStreamingRequestAsync(request, options, ct),
-            (response, ct) => DeepSeekStreaming.ReadServerSentEventsAsync<ChatCompletion>(response, ct));
+            (response, ct) => DeepSeekStreaming.ReadServerSentEventsAsync<ChatCompletion>(response, ct), options?.CancellationToken ?? CancellationToken.None);
     }
 
     protected internal virtual PipelineMessage CreateCompleteRequest(ChatCompletionRequest request, RequestOptions? options)

@@ -59,6 +59,21 @@ Schema:
         merged.ToolMode = overrides.ToolMode ?? merged.ToolMode;
         merged.Tools = overrides.Tools ?? merged.Tools;
         merged.AdditionalProperties = MergeAdditionalProperties(merged.AdditionalProperties, overrides.AdditionalProperties);
+        if (overrides.Reasoning is not null)
+        {
+            foreach (var key in new[] { DeepSeekChatOptionKeys.Thinking, DeepSeekChatOptionKeys.ReasoningEffort })
+            {
+                if (overrides.AdditionalProperties?.ContainsKey(key) != true)
+                {
+                    merged.AdditionalProperties?.Remove(key);
+                }
+            }
+        }
+        else if (overrides.AdditionalProperties?.ContainsKey(DeepSeekChatOptionKeys.ReasoningEffort) == true
+            || overrides.AdditionalProperties?.ContainsKey(DeepSeekChatOptionKeys.Thinking) == true)
+        {
+            merged.Reasoning = null;
+        }
         return merged;
     }
 
@@ -109,12 +124,12 @@ Schema:
         var instructions = BuildInstructions(options?.Instructions, jsonResponseFormat);
         if (!string.IsNullOrWhiteSpace(instructions))
         {
-            request.Messages.Add(new WireChatMessage { Role = "system", Content = instructions });
+            request.Messages.Add(new WireChatMessage { Role = "system", Content = instructions! });
         }
 
         foreach (var message in messages)
         {
-            foreach (var mappedMessage in MapMessages(message))
+            foreach (var mappedMessage in MapMessages(message, options))
             {
                 request.Messages.Add(mappedMessage);
             }
@@ -125,12 +140,10 @@ Schema:
         ApplyAdditionalProperties(request, options, stream);
         request.Stream = stream;
 
-        if (options?.Reasoning is not null)
+        if (GetReasoningEffort(options) is { } effort)
         {
-            request.Thinking = request.Thinking ?? ThinkingMode.Enabled;
-            request.ReasoningEffort ??= options.Reasoning.Effort == ReasoningEffort.ExtraHigh
-                ? ChatReasoningEffort.Max
-                : ChatReasoningEffort.High;
+            request.ReasoningEffort = ParseReasoningEffort(effort);
+            request.Thinking ??= effort == "none" ? ThinkingMode.Disabled : ThinkingMode.Enabled;
         }
 
         return request;
@@ -184,7 +197,7 @@ Schema:
     {
         var choice = response.Choices.FirstOrDefault();
         var message = choice?.Message;
-        var assistant = new AiChatMessage(ChatRole.Assistant, message?.Content ?? string.Empty)
+        var assistant = new AiChatMessage(ChatRole.Assistant, message?.Content?.Text ?? string.Empty)
         {
             RawRepresentation = message,
         };
@@ -219,12 +232,7 @@ Schema:
 
         if (response.Usage is not null)
         {
-            result.Usage = new UsageDetails
-            {
-                InputTokenCount = response.Usage.PromptTokens,
-                OutputTokenCount = response.Usage.CompletionTokens,
-                TotalTokenCount = response.Usage.TotalTokens,
-            };
+            result.Usage = MapUsage(response.Usage);
             result.AdditionalProperties["usage_total_tokens"] = response.Usage.TotalTokens;
         }
 
@@ -237,17 +245,30 @@ Schema:
         return result;
     }
 
-    private static IEnumerable<WireChatMessage> MapMessages(AiChatMessage message)
+    internal static UsageDetails MapUsage(TokenUsage usage)
+        => new()
+        {
+            InputTokenCount = usage.PromptTokens,
+            OutputTokenCount = usage.CompletionTokens,
+            TotalTokenCount = usage.TotalTokens,
+            CachedInputTokenCount = usage.PromptCacheHitTokens ?? usage.PromptTokensDetails?.CachedTokens,
+            ReasoningTokenCount = usage.CompletionTokensDetails?.ReasoningTokens,
+            AdditionalCounts = usage.PromptCacheMissTokens is { } misses
+                ? new AdditionalPropertiesDictionary<long> { ["prompt_cache_miss_tokens"] = misses } : null,
+        };
+
+    private static IEnumerable<WireChatMessage> MapMessages(AiChatMessage message, ChatOptions? options)
     {
+        var detail = GetImageDetail(options);
         if (message.Role == ChatRole.System)
         {
-            yield return new WireChatMessage { Role = "system", Content = message.Text };
+            yield return new WireChatMessage { Role = "system", Content = MapContent(message, detail) };
             yield break;
         }
 
         if (message.Role == ChatRole.User)
         {
-            yield return new WireChatMessage { Role = "user", Content = message.Text };
+            yield return new WireChatMessage { Role = "user", Content = MapContent(message, detail) };
             yield break;
         }
 
@@ -270,7 +291,9 @@ Schema:
                 yield return new WireChatMessage
                 {
                     Role = "tool",
-                    Content = SerializeToolResult(result.Result),
+                    Content = result.Result is IEnumerable<AIContent> contents
+                        ? MapContent(new AiChatMessage(ChatRole.Tool, contents.ToList()), detail)
+                        : new ChatMessageContent(SerializeToolResult(result.Result)),
                     ToolCallId = result.CallId,
                 };
             }
@@ -281,7 +304,7 @@ Schema:
         var assistant = new WireChatMessage
         {
             Role = "assistant",
-            Content = message.Text,
+            Content = MapContent(message, detail),
             ReasoningContent = TryGetReasoningContent(message),
         };
 
@@ -301,6 +324,85 @@ Schema:
 
         yield return assistant;
     }
+
+    private static ChatMessageContent? MapContent(AiChatMessage message, string? detail)
+    {
+        var parts = new List<ChatContentPart>();
+        foreach (var content in message.Contents)
+        {
+            switch (content)
+            {
+                case TextContent text:
+                    parts.Add(new ChatTextContentPart(text.Text));
+                    break;
+                case DataContent data when data.HasTopLevelMediaType("image"):
+                    parts.Add(new ChatImageContentPart(data.Uri, detail));
+                    break;
+                case UriContent uri when uri.HasTopLevelMediaType("image"):
+                    parts.Add(new ChatImageContentPart(uri.Uri.ToString(), detail));
+                    break;
+                case HostedFileContent file when file.HasTopLevelMediaType("image") || file.MediaType is null:
+                    parts.Add(new ChatFileContentPart(file.FileId));
+                    break;
+                case TextReasoningContent:
+                case FunctionCallContent:
+                case FunctionResultContent:
+                    break;
+                default:
+                    throw new NotSupportedException("Unsupported chat content type: " + content.GetType().FullName);
+            }
+        }
+
+        if (parts.Count > 0)
+        {
+            return new ChatMessageContent(parts);
+        }
+
+        return string.IsNullOrWhiteSpace(message.Text) ? null : new ChatMessageContent(message.Text!);
+    }
+
+    internal static string? GetReasoningEffort(ChatOptions? options)
+    {
+        if (options?.AdditionalProperties?.TryGetValue(DeepSeekChatOptionKeys.ReasoningEffort, out var value) == true
+            && value is string effort)
+        {
+            return ParseReasoningEffort(effort).ToString().ToLowerInvariant();
+        }
+
+        return options?.Reasoning is { } reasoning ? reasoning.Effort switch
+        {
+            ReasoningEffort.None => "none",
+            ReasoningEffort.Low => "low",
+            ReasoningEffort.ExtraHigh => "max",
+            _ => "high",
+        } : null;
+    }
+
+    internal static ThinkingMode? GetThinking(ChatOptions? options)
+        => options?.AdditionalProperties?.TryGetValue(DeepSeekChatOptionKeys.Thinking, out var value) == true
+            ? value switch
+            {
+                bool enabled => enabled ? ThinkingMode.Enabled : ThinkingMode.Disabled,
+                "enabled" => ThinkingMode.Enabled,
+                "disabled" => ThinkingMode.Disabled,
+                _ => null,
+            }
+            : null;
+
+    private static ChatReasoningEffort ParseReasoningEffort(string effort)
+        => effort switch
+        {
+            "none" => ChatReasoningEffort.None,
+            "low" or "minimal" => ChatReasoningEffort.Low,
+            "high" or "medium" or "xhigh" => ChatReasoningEffort.High,
+            "max" or "ultra" => ChatReasoningEffort.Max,
+            _ => throw new ArgumentException("Unsupported reasoning effort: " + effort, nameof(effort)),
+        };
+
+    private static string? GetImageDetail(ChatOptions? options)
+        => options?.AdditionalProperties?.TryGetValue(DeepSeekChatOptionKeys.ImageDetail, out var value) == true
+            ? value as string
+            : null;
 
     private static IList<WireChatTool>? MapTools(IList<AITool>? tools)
     {
@@ -414,7 +516,7 @@ Schema:
 
         if (properties.TryGetValue(DeepSeekChatOptionKeys.ReasoningEffort, out var effort) && effort is string effortText)
         {
-            request.ReasoningEffort = effortText == "max" ? ChatReasoningEffort.Max : ChatReasoningEffort.High;
+            request.ReasoningEffort = ParseReasoningEffort(effortText);
         }
 
         if (stream &&

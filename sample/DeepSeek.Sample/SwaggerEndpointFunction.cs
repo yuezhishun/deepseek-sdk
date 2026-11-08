@@ -21,8 +21,8 @@ internal sealed class SwaggerEndpointFunction : AIFunction
     public override JsonElement JsonSchema { get; }
     public override JsonElement? ReturnJsonSchema { get; }
     public override MethodInfo? UnderlyingMethod => null;
-    public override JsonSerializerOptions? JsonSerializerOptions => null;
-    public override IReadOnlyDictionary<string, object?> AdditionalProperties => null;
+    public override JsonSerializerOptions JsonSerializerOptions => new();
+    public override IReadOnlyDictionary<string, object?> AdditionalProperties { get; } = new Dictionary<string, object?>();
 
     public SwaggerEndpointFunction(
         string name,

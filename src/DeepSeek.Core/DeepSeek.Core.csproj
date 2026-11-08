@@ -6,23 +6,23 @@
     <LangVersion>latest</LangVersion>
     <Authors>Yue Zhishun</Authors>
     <Description>Typed DeepSeek SDK for .NET built on System.ClientModel.</Description>
-    <PackageReleaseNotes>1.0.4 release with streaming error handling fix, tool deduplication in Agent Framework adapter, centralized package version management for samples, and AGUI Dojo sample updates.</PackageReleaseNotes>
+    <PackageReleaseNotes>1.0.5：补齐 Search、Fetch、Anthropic Files；修复文件路径、user_id、Low/None 推理和图片映射。新增强类型多模态内容及 Responses（含公共接口兼容性变化）。保持 netstandard2.0，验证 .NET 11 RC3。</PackageReleaseNotes>
     <PackageProjectUrl>https://github.com/yuezhishun/deepseek-sdk</PackageProjectUrl>
     <RepositoryUrl>https://github.com/yuezhishun/deepseek-sdk</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>LLM,AI,DeepSeek,System.ClientModel,API,SDK,Chat,Completions,.NETStandard</PackageTags>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-    <AssemblyVersion>1.0.4.0</AssemblyVersion>
-    <FileVersion>1.0.4.0</FileVersion>
+    <AssemblyVersion>1.0.5.0</AssemblyVersion>
+    <FileVersion>1.0.5.0</FileVersion>
     <PackageIcon>logo.png</PackageIcon>
-    <Version>1.0.4</Version>
+    <Version>1.0.5</Version>
     <PackageId>DeepSeek.Core</PackageId>
     <AssemblyName>DeepSeek.Core</AssemblyName>
     <RootNamespace>DeepSeek</RootNamespace>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <OutputType>Library</OutputType>
     <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
-    <NoWarn>1701;1702;1591;1570</NoWarn>
+    <NoWarn>1701;1702;1591;1570;SCME0004</NoWarn>
     <Title>DeepSeek.Core</Title>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <SignAssembly>false</SignAssembly>
@@ -32,7 +32,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="System.ClientModel" Version="1.14.0" />
+    <PackageReference Include="System.ClientModel" />
   </ItemGroup>
 
   <ItemGroup>

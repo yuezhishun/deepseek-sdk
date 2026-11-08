@@ -31,7 +31,7 @@ var loggerFactory = LoggerFactory.Create(logging =>
         .CreateLogger();
     logging.AddSerilog();
 });
-builder.Services.AddAGUI();
+builder.Services.AddAGUIServer();
 
 builder.Services.AddHttpClient().AddLogging();
 builder.Services.ConfigureHttpJsonOptions(options => {
@@ -47,22 +47,22 @@ WebApplication app = builder.Build();
 ChatClientAgentFactory.Initialize(app.Configuration, loggerFactory);
 
 // Map the AG-UI agent endpoints for different scenarios
-app.MapAGUI("/agentic_chat", ChatClientAgentFactory.CreateAgenticChat());
+app.MapAGUIServer("/agentic_chat", ChatClientAgentFactory.CreateAgenticChat());
 
-app.MapAGUI("/backend_tool_rendering", ChatClientAgentFactory.CreateBackendToolRendering());
+app.MapAGUIServer("/backend_tool_rendering", ChatClientAgentFactory.CreateBackendToolRendering());
 
-app.MapAGUI("/human_in_the_loop", ChatClientAgentFactory.CreateHumanInTheLoop());
+app.MapAGUIServer("/human_in_the_loop", ChatClientAgentFactory.CreateHumanInTheLoop());
 
-app.MapAGUI("/tool_based_generative_ui", ChatClientAgentFactory.CreateToolBasedGenerativeUI());
+app.MapAGUIServer("/tool_based_generative_ui", ChatClientAgentFactory.CreateToolBasedGenerativeUI());
 
 var jsonOptions = app.Services.GetRequiredService<IOptions<Microsoft.AspNetCore.Http.Json.JsonOptions>>();
-app.MapAGUI("/agentic_generative_ui", ChatClientAgentFactory.CreateAgenticUI(jsonOptions.Value.SerializerOptions));
+app.MapAGUIServer("/agentic_generative_ui", ChatClientAgentFactory.CreateAgenticUI(jsonOptions.Value.SerializerOptions));
 
-app.MapAGUI("/shared_state", ChatClientAgentFactory.CreateSharedState(jsonOptions.Value.SerializerOptions));
+app.MapAGUIServer("/shared_state", ChatClientAgentFactory.CreateSharedState(jsonOptions.Value.SerializerOptions));
 
-app.MapAGUI("/predictive_state_updates", ChatClientAgentFactory.CreatePredictiveStateUpdates(jsonOptions.Value.SerializerOptions));
+app.MapAGUIServer("/predictive_state_updates", ChatClientAgentFactory.CreatePredictiveStateUpdates(jsonOptions.Value.SerializerOptions));
 
-app.MapAGUI("/custom_streaming", new CustomStreamingAgent(jsonOptions.Value.SerializerOptions));
+app.MapAGUIServer("/custom_streaming", new CustomStreamingAgent(jsonOptions.Value.SerializerOptions));
 Console.WriteLine($"WriteIndented: {jsonOptions.Value.SerializerOptions.WriteIndented}");
 Console.WriteLine($"Encoder: {jsonOptions.Value.SerializerOptions.Encoder?.GetType()}");
 Console.WriteLine(JavaScriptEncoder.UnsafeRelaxedJsonEscaping.GetType());

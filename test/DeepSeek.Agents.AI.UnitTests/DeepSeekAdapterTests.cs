@@ -7,6 +7,7 @@ using System.Threading.Channels;
 using DeepSeek;
 using DeepSeek.Anthropic;
 using DeepSeek.Chat;
+using DeepSeek.Responses;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using DeepSeek.Agents.AI;
@@ -19,6 +20,198 @@ namespace DeepSeek.Agents.AI.Tests;
 #pragma warning disable MAAI001
 public class DeepSeekAdapterTests
 {
+    [Fact]
+    public async Task ResponsesAsIChatClient_MapsTextReasoningUsageAndFunctionCall()
+    {
+        var responsesClient = new FakeResponsesClient(new Response
+        {
+            Model = "deepseek-v4-flash",
+            Status = "completed",
+            Output =
+            [
+                new ResponseReasoningOutputItem
+                {
+                    Type = "reasoning",
+                    Content = [new ResponseReasoningTextContent { Type = "reasoning_text", Text = "think" }],
+                },
+                new ResponseMessageOutputItem
+                {
+                    Type = "message",
+                    Content = [new ResponseOutputTextContent { Type = "output_text", Text = "done" }],
+                },
+                new ResponseFunctionCallOutputItem
+                {
+                    Type = "function_call",
+                    CallId = "call_weather",
+                    Name = "get_weather",
+                    Arguments = "{\"city\":\"Hangzhou\"}",
+                },
+            ],
+            Usage = new ResponseUsage { InputTokens = 10, OutputTokens = 5, TotalTokens = 15 },
+        });
+
+        var response = await responsesClient.AsIChatClient().GetResponseAsync([new AiChatMessage(ChatRole.User, "hi")]);
+
+        Assert.Equal("deepseek-v4-flash", response.ModelId);
+        Assert.Equal(15, response.Usage?.TotalTokenCount);
+        Assert.Equal("done", response.Text);
+        Assert.Contains(response.Messages[0].Contents, static content => content is TextReasoningContent);
+        Assert.Single(response.Messages[0].Contents.OfType<FunctionCallContent>());
+        Assert.IsType<Response>(response.Messages[0].RawRepresentation);
+    }
+
+    [Fact]
+    public async Task ResponsesAsIChatClient_MapsChatOptionsAndHistoryWithoutExecutingTools()
+    {
+        var responsesClient = new FakeResponsesClient(new Response
+        {
+            Model = "deepseek-v4-flash",
+            Status = "completed",
+            Output = [new ResponseMessageOutputItem { Type = "message", Content = [new ResponseOutputTextContent { Type = "output_text", Text = "ok" }] }],
+        });
+        var client = responsesClient.AsIChatClient();
+
+        await client.GetResponseAsync(
+            [
+                new AiChatMessage(ChatRole.User, "hello"),
+                new AiChatMessage(ChatRole.Assistant, "previous"),
+            ],
+            new ChatOptions
+            {
+                Instructions = "Be concise.",
+                Temperature = 0.2f,
+                TopP = 0.7f,
+                MaxOutputTokens = 50,
+                Reasoning = new ReasoningOptions { Effort = ReasoningEffort.High },
+                ToolMode = ChatToolMode.RequireAny,
+                Tools = [CreateDeclaration("lookup", "Look up a value.", "{\"type\":\"object\"}")],
+                AdditionalProperties = new AdditionalPropertiesDictionary
+                {
+                    [DeepSeekChatOptionKeys.TopLogprobs] = 2,
+                    [DeepSeekChatOptionKeys.UserId] = "user-1",
+                },
+            });
+
+        var request = Assert.Single(responsesClient.Requests);
+        Assert.Equal("Be concise.", request.Instructions);
+        Assert.Equal(0.2, request.Temperature!.Value, 5);
+        Assert.Equal(0.7, request.TopP!.Value, 5);
+        Assert.Equal(50, request.MaxOutputTokens);
+        Assert.Equal("high", request.Reasoning?.Effort);
+        Assert.Equal(2, request.TopLogprobs);
+        Assert.Equal("user-1", request.User);
+        Assert.Equal("required", Assert.IsType<string>(request.ToolChoice));
+        Assert.Equal(2, Assert.IsAssignableFrom<IList<ResponseInputItem>>(request.Input).Count);
+        Assert.Equal("lookup", Assert.Single(request.Tools!).Name);
+    }
+
+    [Fact]
+    public async Task ResponsesAsIChatClient_MapsUrlDataAndHostedFileImagesInOrder()
+    {
+        var responsesClient = new FakeResponsesClient(new Response
+        {
+            Status = "completed",
+            Output = [],
+        });
+        var message = new AiChatMessage(ChatRole.User, new List<AIContent>
+        {
+            new TextContent("Look at these."),
+            new UriContent("https://example.com/image.png", "image/png"),
+            new DataContent(new byte[] { 1, 2, 3 }, "image/png"),
+            new HostedFileContent("file-api-1") { MediaType = "image/png" },
+        });
+
+        await responsesClient.AsIChatClient().GetResponseAsync(
+            [message],
+            new ChatOptions
+            {
+                AdditionalProperties = new AdditionalPropertiesDictionary
+                {
+                    [DeepSeekChatOptionKeys.ImageDetail] = "high",
+                },
+            });
+
+        var request = Assert.Single(responsesClient.Requests);
+        var input = Assert.IsType<ResponseInputMessage>(Assert.Single(request.Input!));
+        var parts = input.Content!.Parts!;
+        Assert.Collection(
+            parts,
+            part => Assert.Equal("input_text", part.Type),
+            part =>
+            {
+                var image = Assert.IsType<ResponseInputImageContent>(part);
+                Assert.Equal("https://example.com/image.png", image.ImageUrl);
+                Assert.Equal("high", image.Detail);
+            },
+            part =>
+            {
+                var image = Assert.IsType<ResponseInputImageContent>(part);
+                Assert.StartsWith("data:image/png;base64,", image.ImageUrl, StringComparison.Ordinal);
+            },
+            part => Assert.Equal("file-api-1", Assert.IsType<ResponseInputImageContent>(part).FileId));
+    }
+
+    [Fact]
+    public async Task ResponsesAsIChatClient_MapsStreamingReasoningAndFunctionCallWithoutContinuation()
+    {
+        var responsesClient = new FakeResponsesClient(
+            new Response { Model = "deepseek-v4-flash", Status = "completed" },
+            new[]
+            {
+                new ResponseStreamEvent { Type = "response.reasoning_text.delta", Delta = "think" },
+                new ResponseStreamEvent { Type = "response.output_text.delta", Delta = "hello" },
+                new ResponseStreamEvent
+                {
+                    Type = "response.function_call_arguments.done",
+                    ItemId = "fc_1",
+                    Item = new ResponseFunctionCallOutputItem
+                    {
+                        Type = "function_call",
+                        Id = "fc_1",
+                        CallId = "call_1",
+                        Name = "lookup",
+                        Arguments = "{\"key\":\"value\"}",
+                    },
+                },
+                new ResponseStreamEvent
+                {
+                    Type = "response.completed",
+                    Response = new Response
+                    {
+                        Id = "resp_1",
+                        Status = "completed",
+                        Usage = new ResponseUsage { InputTokens = 1, OutputTokens = 2, TotalTokens = 3 },
+                    },
+                },
+            });
+
+        var updates = new List<ChatResponseUpdate>();
+        await foreach (var update in responsesClient.AsIChatClient().GetStreamingResponseAsync([new AiChatMessage(ChatRole.User, "hi")]))
+        {
+            updates.Add(update);
+        }
+
+        Assert.Contains(updates, static update => update.Text == "hello");
+        Assert.Contains(updates, static update => update.Contents.OfType<TextReasoningContent>().Any());
+        Assert.Contains(updates, static update => update.Contents.OfType<FunctionCallContent>().Any());
+        var final = Assert.Single(updates, static update => update.AdditionalProperties?.ContainsKey("response") == true);
+        Assert.IsType<Response>(final.AdditionalProperties!["response"]);
+        Assert.Single(responsesClient.StreamingRequests);
+    }
+
+    [Fact]
+    public void ResponsesAsAIAgent_UsesIndependentResponsesAdapter()
+    {
+        var responsesClient = new FakeResponsesClient(new Response { Status = "completed" });
+
+        var chatClient = responsesClient.AsIChatClient();
+        var agent = responsesClient.AsAIAgent(instructions: "Be concise.");
+
+        Assert.IsType<DeepSeekResponsesChatClient>(chatClient);
+        Assert.Same(responsesClient, chatClient.GetService(typeof(ResponsesClient)));
+        Assert.NotNull(agent);
+    }
+
     [Fact]
     public async Task AsIChatClient_MapsReasoningToolCallsAndUsage()
     {
@@ -67,6 +260,43 @@ public class DeepSeekAdapterTests
         Assert.Equal("done", assistant.Text);
         Assert.Equal("think", assistant.AdditionalProperties?["reasoning_content"]);
         Assert.Single(assistant.Contents.OfType<FunctionCallContent>());
+    }
+
+    [Fact]
+    public async Task ChatAsIChatClient_MapsMixedTextUrlDataAndHostedFileImages()
+    {
+        var client = new RecordingResponseChatClient(new ChatCompletion()).AsIChatClient();
+        var message = new AiChatMessage(ChatRole.User, new List<AIContent>
+        {
+            new TextContent("Describe."),
+            new UriContent("https://example.com/image.png", "image/png"),
+            new DataContent(new byte[] { 1, 2 }, "image/png"),
+            new HostedFileContent("file-api-1") { MediaType = "image/png" },
+        });
+
+        await client.GetResponseAsync(
+            [message],
+            new ChatOptions
+            {
+                AdditionalProperties = new AdditionalPropertiesDictionary
+                {
+                    [DeepSeekChatOptionKeys.ImageDetail] = "original",
+                },
+            });
+
+        var request = Assert.Single(RecordingResponseChatClient.RecordedRequests);
+        var content = Assert.Single(request.Messages).Content!;
+        Assert.Collection(
+            content.Parts!,
+            part => Assert.Equal("text", part.Type),
+            part =>
+            {
+                var image = Assert.IsType<ChatImageContentPart>(part);
+                Assert.Equal("https://example.com/image.png", image.ImageUrl.Url);
+                Assert.Equal("original", image.ImageUrl.Detail);
+            },
+            part => Assert.StartsWith("data:image/png;base64,", Assert.IsType<ChatImageContentPart>(part).ImageUrl.Url, StringComparison.Ordinal),
+            part => Assert.Equal("file-api-1", Assert.IsType<ChatFileContentPart>(part).FileId));
     }
 
     [Fact]
@@ -142,13 +372,13 @@ public class DeepSeekAdapterTests
         Assert.Equal(ChatResponseFormatTypes.JsonObject, request.ResponseFormat?.Type);
 
         var systemMessage = Assert.Single(request.Messages, static message => message.Role == "system");
-        Assert.Contains("Keep the answer concise.", systemMessage.Content, StringComparison.Ordinal);
-        Assert.Contains("valid json", systemMessage.Content, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("single JSON object", systemMessage.Content, StringComparison.Ordinal);
-        Assert.DoesNotContain("EXAMPLE INPUT:", systemMessage.Content, StringComparison.Ordinal);
-        Assert.DoesNotContain("JSON OUTPUT:", systemMessage.Content, StringComparison.Ordinal);
-        Assert.True(systemMessage.Content!.IndexOf("Keep the answer concise.", StringComparison.Ordinal)
-            < systemMessage.Content.IndexOf("You must reply with valid json.", StringComparison.Ordinal));
+        Assert.Contains("Keep the answer concise.", systemMessage.Content!.Text, StringComparison.Ordinal);
+        Assert.Contains("valid json", systemMessage.Content.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("single JSON object", systemMessage.Content.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("EXAMPLE INPUT:", systemMessage.Content.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("JSON OUTPUT:", systemMessage.Content.Text, StringComparison.Ordinal);
+        Assert.True(systemMessage.Content.Text!.IndexOf("Keep the answer concise.", StringComparison.Ordinal)
+            < systemMessage.Content.Text.IndexOf("You must reply with valid json.", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -184,28 +414,28 @@ public class DeepSeekAdapterTests
         Assert.Equal(ChatResponseFormatTypes.JsonObject, request.ResponseFormat?.Type);
 
         var systemMessage = Assert.Single(request.Messages, static message => message.Role == "system");
-        Assert.Contains("Use only the provided facts.", systemMessage.Content, StringComparison.Ordinal);
-        Assert.Contains("你必须严格只输出一个合法的 JSON 实例", systemMessage.Content, StringComparison.Ordinal);
-        Assert.Contains("根据它生成一个符合该模式的数据实例", systemMessage.Content, StringComparison.Ordinal);
-        Assert.Contains("以 { 开始", systemMessage.Content, StringComparison.Ordinal);
-        Assert.Contains("以 [ 开始", systemMessage.Content, StringComparison.Ordinal);
-        Assert.Contains("\"type\":\"object\"", systemMessage.Content, StringComparison.Ordinal);
-        Assert.Contains("\"assistantMessage\"", systemMessage.Content, StringComparison.Ordinal);
-        Assert.Contains("\"state\"", systemMessage.Content, StringComparison.Ordinal);
-        Assert.DoesNotContain("{\r\n", systemMessage.Content, StringComparison.Ordinal);
-        Assert.DoesNotContain("\\u0022", systemMessage.Content, StringComparison.Ordinal);
-        Assert.DoesNotContain("EXAMPLE INPUT:", systemMessage.Content, StringComparison.Ordinal);
-        Assert.DoesNotContain("EXAMPLE JSON OUTPUT:", systemMessage.Content, StringComparison.Ordinal);
-        Assert.DoesNotContain("JSON OUTPUT:", systemMessage.Content, StringComparison.Ordinal);
-        Assert.DoesNotContain("Which is the highest mountain in the world? Mount Everest.", systemMessage.Content, StringComparison.Ordinal);
-        Assert.DoesNotContain("""{"question":"Which is the highest mountain in the world?","answer":"Mount Everest"}""", systemMessage.Content, StringComparison.Ordinal);
-        Assert.DoesNotContain("You must reply with valid json.", systemMessage.Content, StringComparison.Ordinal);
-        Assert.DoesNotContain("Return only a single JSON object.", systemMessage.Content, StringComparison.Ordinal);
-        Assert.DoesNotContain("Do not wrap the response in Markdown fences.", systemMessage.Content, StringComparison.Ordinal);
-        Assert.DoesNotContain("Do not add explanatory text before or after the json object.", systemMessage.Content, StringComparison.Ordinal);
-        Assert.DoesNotContain("Schema name:", systemMessage.Content, StringComparison.Ordinal);
-        Assert.DoesNotContain("Schema description:", systemMessage.Content, StringComparison.Ordinal);
-        Assert.DoesNotContain("Follow this guidance exactly", systemMessage.Content, StringComparison.Ordinal);
+        Assert.Contains("Use only the provided facts.", systemMessage.Content!.Text, StringComparison.Ordinal);
+        Assert.Contains("你必须严格只输出一个合法的 JSON 实例", systemMessage.Content.Text, StringComparison.Ordinal);
+        Assert.Contains("根据它生成一个符合该模式的数据实例", systemMessage.Content.Text, StringComparison.Ordinal);
+        Assert.Contains("以 { 开始", systemMessage.Content.Text, StringComparison.Ordinal);
+        Assert.Contains("以 [ 开始", systemMessage.Content.Text, StringComparison.Ordinal);
+        Assert.Contains("\"type\":\"object\"", systemMessage.Content.Text, StringComparison.Ordinal);
+        Assert.Contains("\"assistantMessage\"", systemMessage.Content.Text, StringComparison.Ordinal);
+        Assert.Contains("\"state\"", systemMessage.Content.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("{\r\n", systemMessage.Content.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("\\u0022", systemMessage.Content.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("EXAMPLE INPUT:", systemMessage.Content.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("EXAMPLE JSON OUTPUT:", systemMessage.Content.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("JSON OUTPUT:", systemMessage.Content.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Which is the highest mountain in the world? Mount Everest.", systemMessage.Content.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("""{"question":"Which is the highest mountain in the world?","answer":"Mount Everest"}""", systemMessage.Content.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("You must reply with valid json.", systemMessage.Content.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Return only a single JSON object.", systemMessage.Content.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Do not wrap the response in Markdown fences.", systemMessage.Content.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Do not add explanatory text before or after the json object.", systemMessage.Content.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Schema name:", systemMessage.Content.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Schema description:", systemMessage.Content.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Follow this guidance exactly", systemMessage.Content.Text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -277,7 +507,7 @@ public class DeepSeekAdapterTests
             {
                 Assert.Equal("tool", message.Role);
                 Assert.Equal("call_alpha", message.ToolCallId);
-                Assert.Equal("\"tool-alpha\"", message.Content);
+                Assert.Equal("\"tool-alpha\"", message.Content?.Text);
             });
 
         Assert.Contains(updates, static update => update.AsChatResponseUpdate().Text == "tool-alpha|tool-beta");
@@ -360,13 +590,13 @@ public class DeepSeekAdapterTests
             {
                 Assert.Equal("tool", message.Role);
                 Assert.Equal("call_alpha", message.ToolCallId);
-                Assert.Equal("tool-alpha", message.Content);
+                Assert.Equal("tool-alpha", message.Content?.Text);
             },
             message =>
             {
                 Assert.Equal("tool", message.Role);
                 Assert.Equal("call_beta", message.ToolCallId);
-                Assert.Equal("tool-beta", message.Content);
+                Assert.Equal("tool-beta", message.Content?.Text);
             });
     }
 
@@ -480,13 +710,13 @@ public class DeepSeekAdapterTests
             {
                 Assert.Equal("tool", message.Role);
                 Assert.Equal("call_alpha", message.ToolCallId);
-                Assert.Equal("\"tool-alpha\"", message.Content);
+                Assert.Equal("\"tool-alpha\"", message.Content?.Text);
             },
             message =>
             {
                 Assert.Equal("tool", message.Role);
                 Assert.Equal("call_beta", message.ToolCallId);
-                Assert.Equal("\"tool-beta\"", message.Content);
+                Assert.Equal("\"tool-beta\"", message.Content?.Text);
             });
     }
 
@@ -913,10 +1143,10 @@ public class DeepSeekAdapterTests
         Assert.DoesNotContain("logprobs", nonStreamingHandler.LastRequestBody!, StringComparison.Ordinal);
         Assert.DoesNotContain("top_logprobs", nonStreamingHandler.LastRequestBody!, StringComparison.Ordinal);
         Assert.DoesNotContain("tool_choice_name", nonStreamingHandler.LastRequestBody!, StringComparison.Ordinal);
-        Assert.DoesNotContain("user_id", nonStreamingHandler.LastRequestBody!, StringComparison.Ordinal);
+        Assert.Contains("\"metadata\":{\"user_id\":\"user-123\"}", nonStreamingHandler.LastRequestBody!, StringComparison.Ordinal);
 
         var streamingSse = "data: {\"type\":\"content_block_delta\",\"delta\":{\"text\":\"ok\"}}\n\n" +
-                           "data: [DONE]\n\n";
+                           "data: {\"type\":\"message_stop\"}\n\n";
         var streamingHandler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new StreamContent(new MemoryStream(Encoding.UTF8.GetBytes(streamingSse))),
@@ -945,7 +1175,33 @@ public class DeepSeekAdapterTests
         Assert.DoesNotContain("logprobs", streamingHandler.LastRequestBody!, StringComparison.Ordinal);
         Assert.DoesNotContain("top_logprobs", streamingHandler.LastRequestBody!, StringComparison.Ordinal);
         Assert.DoesNotContain("tool_choice_name", streamingHandler.LastRequestBody!, StringComparison.Ordinal);
-        Assert.DoesNotContain("user_id", streamingHandler.LastRequestBody!, StringComparison.Ordinal);
+        Assert.Contains("\"metadata\":{\"user_id\":\"user-123\"}", streamingHandler.LastRequestBody!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AnthropicAsIChatClient_MapsImageSourcesAndFilesBetaHeader()
+    {
+        var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("{\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}", Encoding.UTF8, "application/json"),
+        });
+        var client = CreateAnthropicClient(handler).AsIChatClient();
+        var message = new AiChatMessage(ChatRole.User, new List<AIContent>
+        {
+            new TextContent("Compare."),
+            new DataContent(new byte[] { 1, 2 }, "image/png"),
+            new UriContent("https://example.com/image.png", "image/png"),
+            new HostedFileContent("file-api-1") { MediaType = "image/png" },
+        });
+
+        await client.GetResponseAsync([message]);
+
+        Assert.Contains("\"type\":\"image\"", handler.LastRequestBody!, StringComparison.Ordinal);
+        Assert.Contains("\"type\":\"base64\"", handler.LastRequestBody!, StringComparison.Ordinal);
+        Assert.Contains("\"type\":\"url\"", handler.LastRequestBody!, StringComparison.Ordinal);
+        Assert.Contains("\"type\":\"file\"", handler.LastRequestBody!, StringComparison.Ordinal);
+        Assert.Contains("\"file_id\":\"file-api-1\"", handler.LastRequestBody!, StringComparison.Ordinal);
+        Assert.True(handler.LastRequest!.Headers.Contains("anthropic-beta"));
     }
 
     private static AiChatMessage CreateAssistantToolCallMessage(string reasoning, params (string Id, string Name)[] toolCalls)
@@ -1011,6 +1267,35 @@ public class DeepSeekAdapterTests
                 Arguments = arguments,
             },
         };
+    }
+
+    private sealed class FakeResponsesClient : ResponsesClient
+    {
+        private readonly Response _response;
+        private readonly Queue<IReadOnlyList<ResponseStreamEvent>> _streams;
+
+        public FakeResponsesClient(Response response, params IReadOnlyList<ResponseStreamEvent>[] streams)
+            : base("deepseek-v4-flash", "test-key")
+        {
+            _response = response;
+            _streams = new Queue<IReadOnlyList<ResponseStreamEvent>>(streams);
+        }
+
+        public List<ResponseRequest> Requests { get; } = [];
+
+        public List<ResponseRequest> StreamingRequests { get; } = [];
+
+        public override Task<ClientResult<Response>> CreateResponseAsync(ResponseRequest request, System.ClientModel.Primitives.RequestOptions? options = null)
+        {
+            Requests.Add(request);
+            return Task.FromResult(ClientResult.FromValue(_response, new FakePipelineResponse()));
+        }
+
+        public override AsyncCollectionResult<ResponseStreamEvent> CreateResponseStreaming(ResponseRequest request, System.ClientModel.Primitives.RequestOptions? options = null)
+        {
+            StreamingRequests.Add(request);
+            return new InlineAsyncCollectionResult<ResponseStreamEvent>(_streams.Dequeue());
+        }
     }
 
     private sealed class FakeChatClient : ChatClient
@@ -1219,6 +1504,8 @@ public class DeepSeekAdapterTests
 
         public string? LastRequestBody { get; private set; }
 
+        public HttpRequestMessage? LastRequest { get; private set; }
+
         public void ConfigureResponse(Action<HttpResponseMessage> configureResponse)
         {
             _configureResponse = configureResponse;
@@ -1226,6 +1513,7 @@ public class DeepSeekAdapterTests
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            LastRequest = request;
             LastRequestBody = request.Content is null ? null : request.Content.ReadAsStringAsync(cancellationToken).GetAwaiter().GetResult();
             var response = _responseFactory(request);
             _configureResponse?.Invoke(response);

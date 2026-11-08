@@ -26,11 +26,9 @@ public class ChatIntegrationTests : IClassFixture<DeepSeekIntegrationFixture>
         _fixture = fixture;
     }
 
-    [Fact]
+    [LiveFact]
     public async Task Models_List_Live()
     {
-        if (!IntegrationTestGuard.RequireConfigured(_fixture)) { return; }
-
         var response = await _fixture.ModelsClient.GetModelsAsync(CreateRequestOptions());
 
         Assert.False(string.IsNullOrWhiteSpace(response.Value.Object));
@@ -39,11 +37,9 @@ public class ChatIntegrationTests : IClassFixture<DeepSeekIntegrationFixture>
         Assert.Contains(response.Value.Data, model => model.Id?.StartsWith("deepseek-", StringComparison.Ordinal) == true);
     }
 
-    [Fact]
+    [LiveFact]
     public async Task Balance_GetUserBalance_Live()
     {
-        if (!IntegrationTestGuard.RequireConfigured(_fixture)) { return; }
-
         var response = await _fixture.BalanceClient.GetBalanceAsync(CreateRequestOptions());
 
         Assert.True(response.Value.IsAvailable);
@@ -55,11 +51,9 @@ public class ChatIntegrationTests : IClassFixture<DeepSeekIntegrationFixture>
         });
     }
 
-    [Fact]
+    [LiveFact]
     public async Task OpenAI_Chat_BasicExactReply_Live()
     {
-        if (!IntegrationTestGuard.RequireConfigured(_fixture)) { return; }
-
         var response = await _fixture.ChatClient.CompleteChatAsync(
             new ChatCompletionRequest
             {
@@ -70,14 +64,12 @@ public class ChatIntegrationTests : IClassFixture<DeepSeekIntegrationFixture>
             },
             CreateRequestOptions());
 
-        Assert.Equal("openai-basic-ok", response.Value.Choices[0].Message?.Content?.Trim());
+        Assert.Equal("openai-basic-ok", response.Value.Choices[0].Message?.Content?.Text?.Trim());
     }
 
-    [Fact]
+    [LiveFact]
     public async Task OpenAI_ChatStreaming_WithUsage_Live()
     {
-        if (!IntegrationTestGuard.RequireConfigured(_fixture)) { return; }
-
         var chunks = new List<ChatCompletion>();
         var textParts = new List<string>();
 
@@ -93,7 +85,7 @@ public class ChatIntegrationTests : IClassFixture<DeepSeekIntegrationFixture>
             CreateRequestOptions()))
         {
             chunks.Add(chunk);
-            var delta = chunk.Choices.FirstOrDefault()?.Delta?.Content;
+            var delta = chunk.Choices.FirstOrDefault()?.Delta?.Content?.Text;
             if (!string.IsNullOrWhiteSpace(delta))
             {
                 textParts.Add(delta);
@@ -108,11 +100,9 @@ public class ChatIntegrationTests : IClassFixture<DeepSeekIntegrationFixture>
         Assert.True(usageChunk.Usage.TotalTokens > 0);
     }
 
-    [Fact]
+    [LiveFact]
     public async Task OpenAI_Completions_Basic_Live()
     {
-        if (!IntegrationTestGuard.RequireConfigured(_fixture)) { return; }
-
         var response = await _fixture.CompletionsClient.CompleteTextAsync(
             new CompletionRequest
             {
@@ -128,11 +118,9 @@ public class ChatIntegrationTests : IClassFixture<DeepSeekIntegrationFixture>
         Assert.StartsWith("42", text, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [LiveFact]
     public async Task OpenAI_Completions_Fim_Live()
     {
-        if (!IntegrationTestGuard.RequireConfigured(_fixture)) { return; }
-
         var response = await _fixture.CompletionsClient.CompleteTextAsync(
             new CompletionRequest
             {
@@ -150,22 +138,22 @@ public class ChatIntegrationTests : IClassFixture<DeepSeekIntegrationFixture>
         Assert.Contains("b", text, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [LiveFact]
     public async Task Anthropic_Messages_Basic_Live()
     {
-        if (!IntegrationTestGuard.RequireConfigured(_fixture)) { return; }
-
         var response = await _fixture.AnthropicClient.CreateMessageAsync(
             new AnthropicMessageRequest
             {
                 MaxTokens = 64,
                 Temperature = 0,
+                Thinking = new AnthropicThinkingConfig { Type = "disabled" },
+                System = "Copy the user's ASCII token byte for byte. Output exactly anthropic-basic-ok with no extra characters.",
                 Messages =
                 [
                     new AnthropicMessageModel
                     {
                         Role = "user",
-                        Content = [new AnthropicContentBlock { Type = "text", Text = "Reply with exactly: anthropic-basic-ok" }],
+                        Content = [new AnthropicContentBlock { Type = "text", Text = "anthropic-basic-ok" }],
                     },
                 ],
             },
@@ -176,17 +164,15 @@ public class ChatIntegrationTests : IClassFixture<DeepSeekIntegrationFixture>
         Assert.Contains(response.Value.Content, block => block.Type == "text" && block.Text?.Contains("anthropic-basic-ok", StringComparison.Ordinal) == true);
     }
 
-    [Fact]
+    [LiveFact]
     public async Task Anthropic_Streaming_Live()
     {
-        if (!IntegrationTestGuard.RequireConfigured(_fixture)) { return; }
-
         var events = new List<AnthropicStreamEvent>();
 
         await foreach (var item in _fixture.AnthropicClient.CreateMessageStreaming(
             new AnthropicMessageRequest
             {
-                MaxTokens = 64,
+                MaxTokens = 1024,
                 Temperature = 0,
                 Thinking = new AnthropicThinkingConfig { Type = "enabled" },
                 OutputConfig = new AnthropicOutputConfig { Effort = "high" },
@@ -195,7 +181,7 @@ public class ChatIntegrationTests : IClassFixture<DeepSeekIntegrationFixture>
                     new AnthropicMessageModel
                     {
                         Role = "user",
-                        Content = [new AnthropicContentBlock { Type = "text", Text = "Reply with exactly anthropic-stream-ok." }],
+                        Content = [new AnthropicContentBlock { Type = "text", Text = "Calculate 37 * 43 step by step, then finish with anthropic-stream-ok." }],
                     },
                 ],
             },
@@ -210,26 +196,26 @@ public class ChatIntegrationTests : IClassFixture<DeepSeekIntegrationFixture>
         Assert.Contains(events, item => string.Equals(item.Type, "message_stop", StringComparison.Ordinal) || item.Usage != null);
     }
 
-    [Fact]
+    [LiveFact]
     public async Task OpenAI_Adapter_ReasoningAndToolMapping_Live()
     {
-        if (!IntegrationTestGuard.RequireConfigured(_fixture)) { return; }
-
         var tool = AIFunctionFactory.Create(
             (string city) => city,
             "echo_city",
             "Echoes the city argument.");
-        var response = await _fixture.OpenAiChatClient.GetResponseAsync(
-            [new Microsoft.Extensions.AI.ChatMessage(Microsoft.Extensions.AI.ChatRole.User, "Call echo_city with city Hangzhou and do not provide a final prose answer.")],
+        var response = await _fixture.Client.GetChatClient(DeepSeekTestModels.ProModel).AsIChatClient().GetResponseAsync(
+            [new Microsoft.Extensions.AI.ChatMessage(Microsoft.Extensions.AI.ChatRole.User, "Work out 37 * 43 before choosing a city: choose Hangzhou if the product is 1591, otherwise choose Shanghai. Think through the computation, then call echo_city with your chosen city and no final prose answer.")],
             new ChatOptions
             {
                 ModelId = DeepSeekTestModels.ProModel,
                 ToolMode = ChatToolMode.Auto,
                 Tools = [tool],
                 Reasoning = new ReasoningOptions { Effort = ReasoningEffort.High },
+                MaxOutputTokens = 1024,
             },
             _fixture.CreateToken());
 
+        Assert.Equal(DeepSeekTestModels.ProModel, response.ModelId);
         var message = Assert.Single(response.Messages);
         Assert.NotEmpty(message.Contents.OfType<TextReasoningContent>());
         var toolCall = Assert.Single(message.Contents.OfType<FunctionCallContent>());
@@ -238,11 +224,9 @@ public class ChatIntegrationTests : IClassFixture<DeepSeekIntegrationFixture>
         Assert.True(message.AdditionalProperties.ContainsKey("reasoning_content"));
     }
 
-    [Fact]
+    [LiveFact]
     public async Task OpenAI_Adapter_JsonSchemaResponse_ReturnsJsonObject_Live()
     {
-        if (!IntegrationTestGuard.RequireConfigured(_fixture)) { return; }
-
         var response = await _fixture.OpenAiChatClient.GetResponseAsync(
             [new Microsoft.Extensions.AI.ChatMessage(Microsoft.Extensions.AI.ChatRole.User, "Create a leasing snapshot for a renter who wants a studio next month. Reply only with the JSON object.")],
             new ChatOptions
@@ -275,11 +259,9 @@ public class ChatIntegrationTests : IClassFixture<DeepSeekIntegrationFixture>
         Assert.False(string.IsNullOrWhiteSpace(stage.GetString()));
     }
 
-    [Fact]
+    [LiveFact]
     public async Task OpenAI_Adapter_JsonObjectResponse_ReturnsParsableJsonObject_Live()
     {
-        if (!IntegrationTestGuard.RequireConfigured(_fixture)) { return; }
-
         var response = await _fixture.OpenAiChatClient.GetResponseAsync(
             [new Microsoft.Extensions.AI.ChatMessage(Microsoft.Extensions.AI.ChatRole.User, "Return exactly one JSON object with properties answer and evidence. Set answer to json-object-ok and evidence to deepseek-json-proof.")],
             new ChatOptions
@@ -307,26 +289,26 @@ public class ChatIntegrationTests : IClassFixture<DeepSeekIntegrationFixture>
         Assert.Equal("deepseek-json-proof", evidence.GetString());
     }
 
-    [Fact]
+    [LiveFact]
     public async Task Anthropic_Adapter_ReasoningAndToolMapping_Live()
     {
-        if (!IntegrationTestGuard.RequireConfigured(_fixture)) { return; }
-
         var tool = AIFunctionFactory.Create(
             (string city) => city,
             "echo_city",
             "Echoes the city argument.");
-        var response = await _fixture.AnthropicChatClient.GetResponseAsync(
-            [new Microsoft.Extensions.AI.ChatMessage(Microsoft.Extensions.AI.ChatRole.User, "Call echo_city with city Hangzhou and do not provide a final prose answer.")],
+        var response = await _fixture.Client.GetAnthropicClient(DeepSeekTestModels.ProModel).AsIChatClient().GetResponseAsync(
+            [new Microsoft.Extensions.AI.ChatMessage(Microsoft.Extensions.AI.ChatRole.User, "Work out 37 * 43 before choosing a city: choose Hangzhou if the product is 1591, otherwise choose Shanghai. Think through the computation, then call echo_city with your chosen city and no final prose answer.")],
             new ChatOptions
             {
                 ModelId = DeepSeekTestModels.ProModel,
                 ToolMode = ChatToolMode.Auto,
                 Tools = [tool],
                 Reasoning = new ReasoningOptions { Effort = ReasoningEffort.High },
+                MaxOutputTokens = 1024,
             },
             _fixture.CreateToken());
 
+        Assert.Equal(DeepSeekTestModels.ProModel, response.ModelId);
         var message = Assert.Single(response.Messages);
         Assert.NotEmpty(message.Contents.OfType<TextReasoningContent>());
         var toolCall = Assert.Single(message.Contents.OfType<FunctionCallContent>());
@@ -335,11 +317,9 @@ public class ChatIntegrationTests : IClassFixture<DeepSeekIntegrationFixture>
         Assert.True(message.AdditionalProperties.ContainsKey("reasoning_content"));
     }
 
-    [Fact]
+    [LiveFact]
     public async Task OpenAI_Agent_MultiTurnConversation_Live()
     {
-        if (!IntegrationTestGuard.RequireConfigured(_fixture)) { return; }
-
         var agent = _fixture.ChatClient.AsAIAgent(
             instructions: "Follow exact reply formatting.",
             name: "TypedOpenAiConversationAgent");
@@ -360,11 +340,9 @@ public class ChatIntegrationTests : IClassFixture<DeepSeekIntegrationFixture>
         Assert.Equal("coral-17", round2.Text?.Trim());
     }
 
-    [Fact]
+    [LiveFact]
     public async Task Anthropic_Agent_MultiTurnReasoningTools_Live()
     {
-        if (!IntegrationTestGuard.RequireConfigured(_fixture)) { return; }
-
         var callCount = 0;
         var tool = AIFunctionFactory.Create(
             () =>
@@ -374,7 +352,7 @@ public class ChatIntegrationTests : IClassFixture<DeepSeekIntegrationFixture>
             },
             "get_constant_result",
             "Returns the constant string tool-result-bravo.");
-        var agent = _fixture.AnthropicClient.AsAIAgent(
+        var agent = _fixture.Client.GetAnthropicClient(DeepSeekTestModels.ProModel).AsAIAgent(
             new ChatClientAgentOptions
             {
                 Name = "TypedAnthropicToolAgent",
@@ -385,6 +363,8 @@ public class ChatIntegrationTests : IClassFixture<DeepSeekIntegrationFixture>
                     Tools = [tool],
                 },
             });
+        var invoker = Assert.IsAssignableFrom<FunctionInvokingChatClient>(agent.GetService(typeof(FunctionInvokingChatClient)));
+        invoker.MaximumIterationsPerRequest = 3;
         var session = await agent.CreateSessionAsync(_fixture.CreateToken());
         var options = new ChatClientAgentRunOptions
         {
@@ -393,6 +373,7 @@ public class ChatIntegrationTests : IClassFixture<DeepSeekIntegrationFixture>
                 ModelId = DeepSeekTestModels.ProModel,
                 ToolMode = ChatToolMode.Auto,
                 Reasoning = new ReasoningOptions { Effort = ReasoningEffort.High },
+                MaxOutputTokens = 1024,
             },
         };
 
@@ -412,15 +393,13 @@ public class ChatIntegrationTests : IClassFixture<DeepSeekIntegrationFixture>
         Assert.Equal("tool-result-bravo", NormalizeExactText(round2.Text));
     }
 
-    [Fact]
+    [LiveFact]
     public async Task Anthropic_Messages_ThinkingAndToolHistory_Live()
     {
-        if (!IntegrationTestGuard.RequireConfigured(_fixture)) { return; }
-
         var response = await _fixture.AnthropicClient.CreateMessageAsync(
             new AnthropicMessageRequest
             {
-                MaxTokens = 96,
+                MaxTokens = 1024,
                 Temperature = 0,
                 Messages =
                 [

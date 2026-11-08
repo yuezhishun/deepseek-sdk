@@ -73,7 +73,7 @@ public sealed class CompletionsClient
 
         return new DelegateAsyncCollectionResult<Completion>(
             ct => SendStreamingRequestAsync(request, options, ct),
-            (response, ct) => DeepSeekStreaming.ReadServerSentEventsAsync<Completion>(response, ct));
+            (response, ct) => DeepSeekStreaming.ReadServerSentEventsAsync<Completion>(response, ct), options?.CancellationToken ?? CancellationToken.None);
     }
 
     private async Task<ClientResult> SendStreamingRequestAsync(CompletionRequest request, RequestOptions? options, CancellationToken cancellationToken)

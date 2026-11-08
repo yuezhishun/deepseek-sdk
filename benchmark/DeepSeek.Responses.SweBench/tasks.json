@@ -1,0 +1,88 @@
+{
+  "dataset": "microsoft/SWE-Sharp-Bench",
+  "split": "train",
+  "revision": "41e599424ff967e0f44d69750f9f023a89f7758d",
+  "tasks": [
+    {
+      "instance_id": "ardalis__cleanarchitecture-546",
+      "repo": "ardalis/CleanArchitecture",
+      "repo_url": "https://github.com/ardalis/CleanArchitecture.git",
+      "base_commit": "8073cf3eb58654d67baeab966e530ae69e4a9378",
+      "version": "0.1",
+      "issue_url": "https://github.com/ardalis/CleanArchitecture/issues/546",
+      "problem_statement": "Attempting to create a new project through the API results in an error regarding the 'CreateProjectDTO' interface.\n\nIt's not possible to create a new project using the endpoint `[POST]/api/Projects`. When trying, it gives an error: `Could not create an instance of type Clean.Architecture.Web.ApiModels.CreateProjectDTO. Type is an interface or abstract class and cannot be instantiated. Path 'name', line 2, position 9.`",
+      "fail_to_pass": [
+        "Clean.Architecture.FunctionalTests.ControllerApis.ProjectCreate.CreateProject"
+      ],
+      "pass_to_pass": [
+        "Clean.Architecture.FunctionalTests.ControllerApis.ProjectCreate.ReturnsOneProject"
+      ]
+    },
+    {
+      "instance_id": "dotnet__benchmarkdotnet-2491",
+      "repo": "dotnet/BenchmarkDotNet",
+      "repo_url": "https://github.com/dotnet/BenchmarkDotNet.git",
+      "base_commit": "41b23b7dc8037cec7c05c0ca0bac0db1e767954b",
+      "version": "0.1",
+      "issue_url": "https://github.com/dotnet/BenchmarkDotNet/issues/2491",
+      "problem_statement": "Custom `SimpleJob` Id ignored when the `MinIterationTime` attribute is used.\n\nJobs declared as attributes have their Ids replaced with random Job names in the summary table when the `MinIterationTime` attribute is used. The issue can be reproduced with two `SimpleJob` attributes, each with an explicit id, together with `MinIterationTime`.",
+      "fail_to_pass": [
+        "BenchmarkDotNet.Tests.Configs.JobTests.UnfreezeCopy_PreservesIdCharacteristic"
+      ],
+      "pass_to_pass": [
+        "BenchmarkDotNet.Tests.ConfigParserTests.UsersCanSpecifyWithoutOverheadEvalution",
+        "BenchmarkDotNet.Tests.ConfigParserTests.UserCanSpecifyNoForceGCs",
+        "BenchmarkDotNet.Tests.ConfigParserTests.InvalidHardwareCounterNameMeansFailure",
+        "BenchmarkDotNet.Tests.ConfigParserTests.UserCanEasilyRequestToRunTheBenchmarkOncePerIteration",
+        "BenchmarkDotNet.Tests.ConfigParserTests.UserCanSpecifyBuildTimeout",
+        "BenchmarkDotNet.Tests.ConfigParserTests.CanParseInfo",
+        "BenchmarkDotNet.Tests.ConfigParserTests.NetMonikersAreRecognizedAsNetCoreMonikers",
+        "BenchmarkDotNet.Tests.ConfigParserTests.UserCanSpecifyCustomMaxParameterColumnWidth",
+        "BenchmarkDotNet.Tests.ConfigParserTests.UserCanSpecifyEnvironmentVariables",
+        "BenchmarkDotNet.Tests.ConfigParserTests.DotNetCliParsedCorrectly",
+        "BenchmarkDotNet.Tests.ConfigParserTests.UserCanSpecifyHowManyTimesTheBenchmarkShouldBeExecuted",
+        "BenchmarkDotNet.Tests.ConfigParserTests.SimpleConfigParsedCorrectly",
+        "BenchmarkDotNet.Tests.ConfigParserTests.SimpleConfigAlternativeVersionParsedCorrectly",
+        "BenchmarkDotNet.Tests.ConfigParserTests.WhenConfigOptionsFlagsAreNotSpecifiedTheyAreNotSet",
+        "BenchmarkDotNet.Tests.ConfigParserTests.TooManyHardwareCounterNameMeansFailure",
+        "BenchmarkDotNet.Tests.ConfigParserTests.UserCanSpecifyCustomDefaultJobAndOverwriteItsSettingsViaConsoleArgs",
+        "BenchmarkDotNet.Tests.ConfigParserTests.NonExistingPathMeansFailure",
+        "BenchmarkDotNet.Tests.ConfigParserTests.UserCanChooseStrategy",
+        "BenchmarkDotNet.Tests.ConfigParserTests.PackagesPathParsedCorrectly",
+        "BenchmarkDotNet.Tests.ConfigParserTests.CanParseDisassemblerWithCustomRecursiveDepth",
+        "BenchmarkDotNet.Tests.ConfigParserTests.WhenCustomDisassemblerSettingsAreProvidedItsEnabledByDefault",
+        "BenchmarkDotNet.Tests.ConfigParserTests.CanParseHardwareCounters",
+        "BenchmarkDotNet.Tests.ConfigParserTests.WhenUserDoesNotSpecifyTimeoutTheDefaultValueIsUsed",
+        "BenchmarkDotNet.Tests.ConfigParserTests.UserCanSpecifyProcessPlatform",
+        "BenchmarkDotNet.Tests.ConfigParserTests.IlCompilerPathParsedCorrectly",
+        "BenchmarkDotNet.Tests.ConfigParserTests.ConfigOptionsParsedCorrectly",
+        "BenchmarkDotNet.Tests.ConfigParserTests.UserCanSpecifyWasmArgsViaResponseFile",
+        "BenchmarkDotNet.Tests.ConfigParserTests.UserCanSpecifyWasmArgsUsingEquals",
+        "BenchmarkDotNet.Tests.ConfigParserTests.PlatformSpecificMonikersAreSupported",
+        "BenchmarkDotNet.Tests.ConfigParserTests.MonoPathParsedCorrectly",
+        "BenchmarkDotNet.Tests.ConfigParserTests.CanCompareFewDifferentRuntimes",
+        "BenchmarkDotNet.Tests.ConfigParserTests.InvalidEnvVarAreRecognized",
+        "BenchmarkDotNet.Tests.ConfigParserTests.CheckUpdateInvalidArgs",
+        "BenchmarkDotNet.Tests.ConfigParserTests.EmptyArgsMeansConfigWithoutJobs",
+        "BenchmarkDotNet.Tests.ConfigParserTests.CanUseStatisticalTestsToCompareFewDifferentRuntimes",
+        "BenchmarkDotNet.Tests.ConfigParserTests.SpecifyingInvalidStatisticalTestsThresholdMeansFailure",
+        "BenchmarkDotNet.Tests.ConfigParserTests.NetFrameworkMonikerParsedCorrectly",
+        "BenchmarkDotNet.Tests.ConfigParserTests.CheckUpdateValidArgs"
+      ]
+    },
+    {
+      "instance_id": "messagepack-csharp__messagepack-csharp-2057",
+      "repo": "MessagePack-CSharp/MessagePack-CSharp",
+      "repo_url": "https://github.com/MessagePack-CSharp/MessagePack-CSharp.git",
+      "base_commit": "44f79c1f3e23ff16ecadc22e8c135c449a1890ae",
+      "version": "0.1",
+      "issue_url": "https://github.com/MessagePack-CSharp/MessagePack-CSharp/issues/2057",
+      "problem_statement": "Code analysis and fix don't work for Nullable and generics in the 3.0 prerelease. The code fix does not add `MessagePackObjectAttribute` and `KeyAttribute` to a nullable value type, and code analysis does not report that a type used in a generic collection is missing `MessagePackObjectAttribute`. Version used: 3.0.238-rc.1; runtime: net6.0.",
+      "fail_to_pass": [
+        "MsgPack00xAnalyzerTests.AddAttributeToType_Nullable",
+        "MsgPack00xAnalyzerTests.AddAttributeToType_Generic"
+      ],
+      "pass_to_pass": []
+    }
+  ]
+}

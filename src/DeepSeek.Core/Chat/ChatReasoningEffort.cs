@@ -4,4 +4,6 @@ public enum ChatReasoningEffort
 {
     High,
     Max,
+    Low,
+    None,
 }

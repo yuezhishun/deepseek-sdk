@@ -8,6 +8,7 @@ public sealed class Completion
     public string? Object { get; set; }
     public long Created { get; set; }
     public string? Model { get; set; }
+    public string? SystemFingerprint { get; set; }
     public IList<CompletionChoice> Choices { get; set; } = [];
     public TokenUsage? Usage { get; set; }
 }

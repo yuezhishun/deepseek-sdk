@@ -89,6 +89,9 @@ project.fragment.lock.json
 artifacts/
 .artifacts/
 
+# Local AGUI web dependencies
+sample/DeepSeek.Agui.Web/package-lock.json
+
 # ASP.NET Scaffolding
 ScaffoldingReadMe.txt
 

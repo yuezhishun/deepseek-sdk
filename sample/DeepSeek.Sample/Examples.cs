@@ -35,6 +35,23 @@ internal class Examples
         }
     }
 
+    /// <summary>
+    /// Deterministic vision request example. Enable it with
+    /// <c>DeepSeek:RunVisionExample=true</c> in the local configuration.
+    /// </summary>
+    public static async Task RunVisionExampleAsync(IChatClient chatClient)
+    {
+        WriteExampleHeader("Vision URL Image");
+        var response = await chatClient.GetResponseAsync(
+        [new Microsoft.Extensions.AI.ChatMessage(ChatRole.User,
+        [
+            new TextContent("Describe this image in one sentence."),
+            new UriContent("https://example.com/example-image.png", "image/png"),
+        ])]);
+
+        Console.WriteLine(response.Text);
+    }
+
     public static async Task RunStreamingAgentRoundAsync(
         AIAgent agent,
         AgentSession session,

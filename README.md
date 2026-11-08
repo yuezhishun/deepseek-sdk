@@ -1,20 +1,50 @@
 # deepseek-sdk
 
+当前 SDK 版本为 **1.0.5**，安装命令见下方；Microsoft Agent Framework 引用已更新至 **1.28.0**。
+
 `deepseek-sdk` is a .NET SDK for DeepSeek with two primary libraries:
 
 - `src/DeepSeek.Core`: built on `System.ClientModel` and the HTTP pipeline model, providing a consistent request handling model, better control over cross-cutting concerns such as logging, retries, and diagnostics, and a stronger foundation for extensible typed SDK clients
 - `src/DeepSeek.Agents.AI`: extension and adapter support for Microsoft Agent Framework
+- accepts model identifiers supplied by the caller, so applications can follow current and future DeepSeek model names without a Core package upgrade
 - support for DeepSeek's two Beta APIs: chat prefix continuation and FIM completion
 - implements thinking mode following DeepSeek's official documentation, including reasoning enablement, reasoning effort control, `reasoning_content` handling, and continued reasoning semantics across multi-turn conversations and tool calls
+
+## Changelog
+
+### 1.0.5
+
+- 补齐独立 Search/Fetch 和 Anthropic Files，修复文件路径、图片工具结果及 Chat `user_id`。
+- 补齐 `None/Low/High/Max` 推理、选项优先级、Anthropic 流式工具参数和服务端搜索历史。
+- 统一缓存、搜索及抓取用量；保持 `netstandard2.0`，增加 .NET 11 RC3 验证，包版本仍为 `1.0.5`。
+- [新增接口、兼容性边界与 .NET 11 验收命令](README_CN.md#net-11-与验收命令)。
+
+- Added typed multimodal content for Chat Completions, Responses `input_image`, and Anthropic image sources.
+- Added the OpenAI-compatible Files API client with upload, list, retrieve, and delete operations.
+- Added URL, base64/data URL, and hosted `file_id` mappings to all Microsoft AI adapters.
+- The unified typed content model is a public API breaking change. Image-capable model identifiers remain caller-supplied strings.
+
+- Redesigned the public Responses models as typed polymorphic request, tool, output-item, content-part, and semantic SSE event models.
+- Added Responses support for JSON object/schema output, function tools, server-side web search, the `apply_patch` custom tool, reasoning, annotations, usage details, and unknown-field preservation.
+- Added synchronous, asynchronous, raw-result, and semantic SSE APIs plus independent `Microsoft.Extensions.AI`/`Microsoft.Agents.AI` adapters.
+- Audited Chat JSON Output, strict tools, logprobs, user identifiers, prefix continuation, FIM, and Anthropic thinking/tool streaming compatibility.
+- Updated both release packages and centralized package versions to `1.0.5`; the Responses model redesign is a public API breaking change.
+- Updated the dependency baseline to `Microsoft.Agents.AI 1.28.0` and `Microsoft.Extensions.AI 10.11.0`, including AGUI hosting preview compatibility for .NET 10 samples and integration tests.
 
 ## Installation
 
 ```bash
-dotnet add package DeepSeek.Core --version 1.0.1
-dotnet add package DeepSeek.Agents.AI --version 1.0.1
+dotnet add package DeepSeek.Core --version 1.0.5
+dotnet add package DeepSeek.Agents.AI --version 1.0.5
 ```
 
 The core NuGet package is named `DeepSeek.Core`, while the public namespaces remain `DeepSeek` and `DeepSeek.*`.
+
+### Microsoft AI compatibility
+
+`DeepSeek.Agents.AI` is built and tested against `Microsoft.Agents.AI 1.28.0` and `Microsoft.Extensions.AI 10.11.0`.
+
+The AGUI samples and AGUI integration tests use `Microsoft.Agents.AI.Hosting.AGUI.AspNetCore 1.28.0-preview.261106.1` and target .NET 10. The AGUI package is a preview dependency; the regular Chat and Responses adapters do not require it.
 
 ## Projects
 
@@ -30,6 +60,92 @@ It includes:
 - `ModelsClient` for model listing
 - `BalanceClient` for billing and balance queries
 - `AnthropicClient` for the Anthropic-style messages API exposed by DeepSeek
+- `ResponsesClient` for the stateless Responses API and semantic SSE streaming
+- `FilesClient` for the OpenAI-compatible Files API
+
+Responses requests are stateless: send the complete `Input` history on every call. `Input` and `Instructions` must not both be absent.
+
+Model identifiers are caller configuration. The SDK accepts them as strings and does not publish a fixed model enum or constants, so a model name change does not require upgrading the Core package.
+
+```csharp
+using DeepSeek;
+using DeepSeek.Responses;
+
+var responses = new DeepSeekClient("your-api-key")
+    .GetResponsesClient("your-model-id");
+
+var response = await responses.CreateResponseAsync(new ResponseRequest
+{
+    Instructions = "You are a concise assistant.",
+    Input = "Return the answer as JSON.",
+    Text = new ResponseTextOptions
+    {
+        Format = ResponseTextFormat.JsonSchema(
+            "answer",
+            new { type = "object", properties = new { answer = new { type = "string" } }, required = new[] { "answer" } }),
+    },
+    Tools =
+    [
+        new ResponseFunctionTool
+        {
+            Name = "lookup_weather",
+            Description = "Look up the weather for a city.",
+            Parameters = new { type = "object", properties = new { city = new { type = "string" } } },
+            Strict = true,
+        },
+        new ResponseWebSearchTool(),
+        new ResponseCustomTool { Name = "apply_patch" },
+    ],
+});
+
+Console.WriteLine(response.Value.OutputText);
+```
+
+#### Multimodal requests and Files API
+
+Image-capable models are selected by the caller, for example `deepseek-flash`; the SDK does not validate or enumerate model names. Chat accepts text, URL/data-URL images, and Files API references:
+
+```csharp
+using DeepSeek.Chat;
+
+var chat = new DeepSeekClient("your-api-key").GetChatClient("deepseek-flash");
+var response = await chat.CompleteChatAsync(new ChatCompletionRequest
+{
+    Messages =
+    [new ChatMessage
+    {
+        Role = "user",
+        Content = new ChatContentPart[]
+        {
+            new ChatTextContentPart("What is in these images?"),
+            new ChatImageContentPart("https://example.com/image.png", "high"),
+            new ChatImageContentPart("data:image/png;base64,...", "auto"),
+            new ChatFileContentPart { FileId = "file-api-..." },
+        },
+    }],
+});
+```
+
+Responses uses `ResponseInputImageContent` (`ImageUrl`, `Detail`, or `FileId`) inside a `ResponseContentValue`; Anthropic uses `AnthropicContentBlock { Type = "image", Source = new AnthropicImageSource { ... } }`. The Microsoft AI adapter maps `DataContent`, `UriContent`, and `HostedFileContent` automatically; set `DeepSeekChatOptionKeys.ImageDetail` in `ChatOptions.AdditionalProperties` to choose image detail.
+
+Files can be uploaded and then referenced by ID:
+
+```csharp
+var files = new DeepSeekClient("your-api-key").GetFilesClient();
+await using var stream = File.OpenRead("image.png");
+var file = await files.UploadFileAsync(stream, "image.png");
+var page = await files.ListFilesAsync(new FileListOptions { Limit = 100, Order = "desc" });
+var details = await files.RetrieveFileAsync(file.Value.Id!);
+await files.DeleteFileAsync(file.Value.Id!);
+```
+
+Supported image formats are JPEG, PNG, GIF, and WebP. Inline image URLs/data URLs, request body limits, and the 64 MiB Files upload limit are service limits; Files expiry is 3,600–2,592,000 seconds when configured.
+
+For streaming, enumerate `CreateResponseStreaming(...)`. Events expose their semantic `Type`, `SequenceNumber`, typed `Item`/`ContentPart`, and terminal `Response`; the stream ends with `response.completed`, `response.incomplete`, or `response.failed`.
+
+`ChatClient` uses `response_format: { "type": "json_object" }` for Chat JSON Output. Strict function schemas are a Beta capability. `GetChatPrefixClient(...)` targets `/beta/chat/completions` and validates the final assistant message with `Prefix = true`; `CompletionsClient` targets `/beta/completions` and accepts `Prompt`, `Suffix`, `Stop`, and `Stream`.
+
+`AnthropicClient` targets `/anthropic/v1/messages` and supports system prompts, stop sequences, thinking, output effort, tool use/results, and the documented streaming events. DeepSeek ignores unsupported Anthropic fields such as `top_k`, while `metadata.user_id` is supported.
 
 Typical usage:
 
@@ -38,7 +154,7 @@ using DeepSeek;
 using DeepSeek.Chat;
 
 var client = new DeepSeekClient("your-api-key");
-var chat = client.GetChatClient("deepseek-v4-flash");
+var chat = client.GetChatClient("deepseek-flash");
 
 var response = await chat.CompleteChatAsync(new ChatCompletionRequest
 {
@@ -66,7 +182,7 @@ using DeepSeek;
 using DeepSeek.Chat;
 
 var client = new DeepSeekClient("your-api-key");
-var chat = client.GetChatClient("deepseek-v4-flash");
+var chat = client.GetChatClient("deepseek-flash");
 
 var response = await chat.CompleteChatAsync(new ChatCompletionRequest
 {
@@ -84,7 +200,7 @@ var response = await chat.CompleteChatAsync(new ChatCompletionRequest
 
 var message = response.Value.Choices[0].Message;
 Console.WriteLine(message?.ReasoningContent);
-Console.WriteLine(message?.Content);
+Console.WriteLine(message?.Content?.Text);
 ```
 
 ### `src/DeepSeek.Agents.AI`
@@ -94,6 +210,7 @@ The `DeepSeek.Agents.AI` package adapts the typed SDK to the abstractions from `
 It includes:
 
 - `AsIChatClient(...)` extension methods for `ChatClient` and `AnthropicClient`
+- independent `AsIChatClient(...)` and `AsAIAgent(...)` extensions for `ResponsesClient`
 - `DeepSeekChatClientOptions` for adapter-specific configuration
 - support for `ChatOptions`, tool calls, streaming updates, and reasoning metadata
 - integration helpers for agent scenarios built on `Microsoft.Agents.AI`
@@ -106,7 +223,7 @@ using Microsoft.Extensions.AI;
 using DeepSeek.Agents.AI;
 
 var client = new DeepSeekClient("your-api-key")
-    .GetChatClient("deepseek-v4-flash")
+    .GetChatClient("deepseek-flash")
     .AsIChatClient();
 
 var response = await client.GetResponseAsync(
@@ -129,7 +246,7 @@ using Microsoft.Extensions.AI;
 using DeepSeek.Agents.AI;
 
 var client = new DeepSeekClient("your-api-key")
-    .GetChatClient("deepseek-v4-flash")
+    .GetChatClient("deepseek-flash")
     .AsIChatClient();
 
 var response = await client.GetResponseAsync(
@@ -172,24 +289,38 @@ using DeepSeek.Agents.AI;
 using Microsoft.Agents.AI.Hosting.AGUI.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddAGUI();
+builder.Services.AddAGUIServer();
 
 var app = builder.Build();
 
 var chatClient = new DeepSeekClient("your-api-key")
-    .GetChatClient("deepseek-v4-flash");
+    .GetChatClient("deepseek-flash");
 
 var agent = chatClient.AsAIAgent(
     name: "DeepSeekAgUiHostedAgent",
     instructions: "You are a concise assistant.");
 
-app.MapAGUI("/agui", agent);
+app.MapAGUIServer("/agui", agent);
 app.Run();
 ```
 
 If you want a ready-to-run reference, start from `sample/DeepSeek.Agui.Agent` and connect `sample/DeepSeek.Agui.Web` to that endpoint.
 
-Before running the sample locally, rename `sample/appsettings.dev.json` to `sample/appsettings.json` and replace the `apiKey` value with your real DeepSeek API key.
+Before running the sample or live integration tests locally, create the ignored local configuration file once:
+
+```bash
+cp sample/appsettings.dev.json sample/appsettings.json
+```
+
+Then modify only the ignored `sample/appsettings.json`:
+
+```json
+{
+  "apiKey": "your-real-deepseek-api-key"
+}
+```
+
+Without this file, tests use `test-key` from `sample/appsettings.dev.json` and automatically skip live network tests.
 
 ## Repository Layout
 
@@ -239,7 +370,7 @@ using DeepSeek;
 using DeepSeek.Chat;
 
 var client = new DeepSeekClient("your-api-key");
-var chat = client.GetChatPrefixClient("deepseek-v4-flash");
+var chat = client.GetChatPrefixClient("deepseek-flash");
 
 var response = await chat.CompleteChatAsync(new ChatCompletionRequest
 {
@@ -255,7 +386,7 @@ var response = await chat.CompleteChatAsync(new ChatCompletionRequest
     ]
 });
 
-Console.WriteLine(response.Value.Choices[0].Message?.Content);
+Console.WriteLine(response.Value.Choices[0].Message?.Content?.Text);
 ```
 
 For prefix continuation requests, the final message must be an assistant message with `Prefix = true`.
@@ -269,7 +400,7 @@ using DeepSeek;
 using DeepSeek.Completions;
 
 var client = new DeepSeekClient("your-api-key");
-var completions = client.GetCompletionsClient("deepseek-v4-flash");
+var completions = client.GetCompletionsClient("deepseek-flash");
 
 var response = await completions.CompleteTextAsync(new CompletionRequest
 {
@@ -346,10 +477,6 @@ Notes:
 - Configure your logger provider such as console, Serilog, or another sink.
 - Streaming scenarios should keep body logging disabled unless payload inspection is strictly required for debugging.
 - Be careful with sensitive data when enabling full payload logging in production.
-
-## Current caveat
-
-`DeepSeekAnthropicChatClient` and the Anthropic-style adapter path are available in the repository, but they have not been tested as thoroughly as the primary `ChatClient`-based path. Use them with additional validation in production scenarios.
 
 ## Notes
 

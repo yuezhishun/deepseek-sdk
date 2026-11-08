@@ -25,6 +25,7 @@ public sealed class DeepSeekChatClientOptions
     public int? TopLogprobs { get; set; }
     public string? ToolChoiceName { get; set; }
     public string? UserId { get; set; }
+    public string? ImageDetail { get; set; }
     public AdditionalPropertiesDictionary? AdditionalProperties { get; set; }
 
     internal ChatOptions ToChatOptions()
@@ -52,7 +53,7 @@ public sealed class DeepSeekChatClientOptions
         if (ReasoningEffort is not null)
         {
             additionalProperties ??= [];
-            additionalProperties[DeepSeekChatOptionKeys.ReasoningEffort] = ReasoningEffort.Value == ChatReasoningEffort.Max ? "max" : "high";
+            additionalProperties[DeepSeekChatOptionKeys.ReasoningEffort] = ReasoningEffort.Value.ToString().ToLowerInvariant();
         }
 
         if (IncludeUsage is not null)
@@ -83,6 +84,12 @@ public sealed class DeepSeekChatClientOptions
         {
             additionalProperties ??= [];
             additionalProperties[DeepSeekChatOptionKeys.UserId] = UserId;
+        }
+
+        if (!string.IsNullOrWhiteSpace(ImageDetail))
+        {
+            additionalProperties ??= [];
+            additionalProperties[DeepSeekChatOptionKeys.ImageDetail] = ImageDetail;
         }
 
         options.AdditionalProperties = additionalProperties;

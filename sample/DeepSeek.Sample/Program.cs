@@ -9,9 +9,6 @@ using Sample;
 using Serilog;
 using System.ClientModel.Primitives;
 
-string FlashModel = "deepseek-v4-flash";
-
-
 var builder = new ConfigurationBuilder()
     .SetBasePath(Directory.GetCurrentDirectory())
     .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
@@ -34,6 +31,7 @@ var loggerFactory = LoggerFactory.Create(builder =>
 });
 
 var configuration = builder.Build();
+var model = configuration["DeepSeek:Model"] ?? configuration["Model"] ?? "deepseek-flash";
 
 var apiKey = configuration["apiKey"];
 var loggingSection = configuration.GetSection("DeepSeek:Logging");
@@ -61,7 +59,7 @@ var clientOptions = new DeepSeekClientOptions
 };
 
 var sdk = new DeepSeekClient(apiKey, clientOptions);
-var chatClient = sdk.GetChatClient(FlashModel).AsIChatClient(new(){IncludeUsage = true}); 
+var chatClient = sdk.GetChatClient(model).AsIChatClient(new(){IncludeUsage = true});
 
 var weatherTool = AIFunctionFactory.Create(
     TestTools.GetWeather,
@@ -109,6 +107,11 @@ Console.WriteLine();
 
 await Examples.GetModels(sdk);
 await Examples.GetUserBalanceAsync(sdk);
+
+if (configuration.GetValue<bool>("DeepSeek:RunVisionExample"))
+{
+    await Examples.RunVisionExampleAsync(chatClient);
+}
 
 // 强类型 JSON 示例
 var jsonAgent = chatClient.AsAIAgent(new ChatClientAgentOptions
