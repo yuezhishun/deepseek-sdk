@@ -12,6 +12,9 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     env:
       CONFIGURATION: Release
       PACKAGE_OUTPUT: artifacts/packages
@@ -59,16 +62,6 @@ jobs:
       - name: Pack DeepSeek.Agents.AI
         run: dotnet pack src/DeepSeek.Agents.AI/DeepSeek.Agents.AI.csproj --configuration "$CONFIGURATION" --no-restore --output "$PACKAGE_OUTPUT" -p:ContinuousIntegrationBuild=true -p:Version=${{ env.PACKAGE_VERSION }}
 
-      - name: Validate NuGet API key
-        shell: pwsh
-        env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
-        run: |
-          if ([string]::IsNullOrWhiteSpace($env:NUGET_API_KEY)) {
-            throw "GitHub Actions secret NUGET_API_KEY is not configured."
-          }
-          Write-Host "NUGET_API_KEY is configured."
-
       - name: List packages
         shell: pwsh
         run: Get-ChildItem $env:PACKAGE_OUTPUT | Select-Object Name,Length
@@ -91,10 +84,16 @@ jobs:
           Write-Host " - $corePackage"
           Write-Host " - $agentsPackage"
 
+      - name: NuGet login with trusted publishing
+        uses: NuGet/login@v1
+        id: nuget-login
+        with:
+          user: yueyuan
+
       - name: Publish DeepSeek.Core
         shell: pwsh
         env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
         run: |
           dotnet nuget push "$env:PACKAGE_OUTPUT/DeepSeek.Core.$env:PACKAGE_VERSION.nupkg" `
             --api-key $env:NUGET_API_KEY `
@@ -105,7 +104,7 @@ jobs:
       - name: Publish DeepSeek.Agents.AI
         shell: pwsh
         env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
         run: |
           dotnet nuget push "$env:PACKAGE_OUTPUT/DeepSeek.Agents.AI.$env:PACKAGE_VERSION.nupkg" `
             --api-key $env:NUGET_API_KEY `

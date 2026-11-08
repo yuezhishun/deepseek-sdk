@@ -496,6 +496,20 @@ var client = new DeepSeekClient("your-api-key", clientOptions);
 - 请根据需要配置日志提供程序，例如 console、Serilog 或其他 sink
 - 在生产环境开启完整 payload 日志时，请谨慎处理敏感数据
 
+## NuGet 发布
+
+发布由推送 `v*` 标签触发，标签 `v1.0.5` 对应包版本 `1.0.5`。工作流 `.github/workflows/publish-nuget.yml` 使用 [NuGet Trusted Publishing](https://learn.microsoft.com/en-us/nuget/nuget-org/trusted-publishing) 和 `NuGet/login@v1`，在推送包之前通过 GitHub OIDC 获取临时 API Key，不再读取固定的 `NUGET_API_KEY` 仓库 Secret。
+
+NuGet 策略应绑定以下值：
+
+- NuGet 用户名（Package owner）：`yueyuan`，使用用户名而非邮箱。
+- Repository Owner：`yuezhishun`。
+- Repository：`deepseek-sdk`。
+- Workflow：`publish-nuget.yml`，仅填写文件名。
+- 包范围：`DeepSeek.Core`、`DeepSeek.Agents.AI`。
+
+新策略可能显示 7 天临时激活窗口；窗口内首次成功发布后会永久激活。CI 每次发布自动取得短期密钥，无需手动复制密钥或定期更新仓库 Secret。
+
 ## 说明
 
 - 当前维护测试的范围包括 `src/DeepSeek.Core` 和 `src/DeepSeek.Agents.AI`
