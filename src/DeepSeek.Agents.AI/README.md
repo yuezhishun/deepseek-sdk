@@ -5,10 +5,10 @@ Adapter package for using the DeepSeek typed client with `Microsoft.Extensions.A
 ## Install
 
 ```bash
-dotnet add package DeepSeek.Agents.AI --version 1.0.5
+dotnet add package DeepSeek.Agents.AI --version 1.0.6
 ```
 
-This package depends on `DeepSeek.Core 1.0.5`.
+This package depends on `DeepSeek.Core 1.0.6`.
 
 Model identifiers are supplied by the caller as strings. Neither this adapter nor `DeepSeek.Core` publishes a fixed model enum or constants, so model name changes do not require a package upgrade.
 
@@ -21,7 +21,7 @@ The adapter is built and tested against:
 - `Microsoft.Agents.AI 1.28.0`
 - `Microsoft.Extensions.AI 10.11.0`
 
-以上为 2026-11-08 核对的最新稳定版；AGUI hosting 升级为 `1.28.0-preview.261106.1`。`Microsoft.Agents.AI.AGUI` 的最新版本仍为 `1.13.0-preview.260703.1`，保留该引用。新版依赖要求将 `Microsoft.Bcl.AsyncInterfaces` 同步至 `10.0.13`；SDK 包版本保持 `1.0.5`。
+以上为 2026-11-08 核对的最新稳定版；AGUI hosting 升级为 `1.28.0-preview.261106.1`。`Microsoft.Agents.AI.AGUI` 的最新版本仍为 `1.13.0-preview.260703.1`，保留该引用。新版依赖要求将 `Microsoft.Bcl.AsyncInterfaces` 同步至 `10.0.13`；SDK 包版本为 `1.0.6`。
 
 版本来源：[Agent Framework 官方 NuGet](https://www.nuget.org/packages/Microsoft.Agents.AI/1.28.0)、[Microsoft.Extensions.AI 官方 NuGet](https://www.nuget.org/packages/Microsoft.Extensions.AI/10.11.0)。
 
@@ -47,6 +47,10 @@ Console.WriteLine(response.Text);
 ```
 
 ## Changelog
+
+### 1.0.6
+
+- 将 `DeepSeek.Core` 依赖、包版本与程序集版本统一为 `1.0.6` / `1.0.6.0`，与新增 Jev/Decisions 决策类库同步发布。
 
 ### 1.0.5
 

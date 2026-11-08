@@ -13,9 +13,11 @@
   <Folder Name="/src/">
     <Project Path="src/DeepSeek.Agents.AI/DeepSeek.Agents.AI.csproj" />
     <Project Path="src/DeepSeek.Core/DeepSeek.Core.csproj" />
+    <Project Path="src/DeepSeek.Decisions/DeepSeek.Decisions.csproj" />
   </Folder>
   <Folder Name="/test/">
     <Project Path="test/DeepSeek.Agents.AI.UnitTests/DeepSeek.Agents.AI.UnitTests.csproj" />
+    <Project Path="test/DeepSeek.Decisions.UnitTests/DeepSeek.Decisions.UnitTests.csproj" />
     <Project Path="test/DeepSeek.IntegrationTests/DeepSeek.IntegrationTests.csproj" />
     <Project Path="test/DeepSeek.Tests/DeepSeek.Tests.csproj" />
   </Folder>

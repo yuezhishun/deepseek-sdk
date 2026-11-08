@@ -34,6 +34,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\DeepSeek.Core\DeepSeek.Core.csproj" />
     <ProjectReference Include="..\..\src\DeepSeek.Agents.AI\DeepSeek.Agents.AI.csproj" />
+    <ProjectReference Include="..\..\src\DeepSeek.Decisions\DeepSeek.Decisions.csproj" />
   </ItemGroup>
 
   <Target Name="RemoveStaleLocalAppSettings" BeforeTargets="_CopyOutOfDateSourceItemsToOutputDirectory" Condition="!Exists('..\..\sample\appsettings.json')">

@@ -1,19 +1,25 @@
 # deepseek-sdk
 
-当前 SDK 版本为 **1.0.5**，安装命令见下方；Microsoft Agent Framework 引用已更新至 **1.28.0**。
+当前 SDK 版本为 **1.0.6**，安装命令见下方；Microsoft Agent Framework 引用已更新至 **1.28.0**。
 
-`deepseek-sdk` 是一个适用于 DeepSeek 的 .NET SDK，包含两个主要库：
+`deepseek-sdk` 是一个适用于 DeepSeek 的 .NET SDK，包含三个主要库：
 
 - `src/DeepSeek.Core`：基于 `System.ClientModel` 与 HTTP pipeline 构建，可获得一致的请求处理模型、对日志、重试、诊断等横切能力更好的控制，也更适合构建可扩展的强类型 SDK 客户端
 - `src/DeepSeek.Agents.AI`：面向 Microsoft Agent Framework 的扩展与适配支持
+- `src/DeepSeek.Decisions`：独立的 Jev 与 Decisions 决策类库，依赖 Core，支持文本、JSON、图片及概率来源诊断；[用法与兼容边界](src/DeepSeek.Decisions/README.md)
 - 模型标识由调用方传入，应用可以跟随 DeepSeek 当前及未来的模型名称，而无需因模型名称变化升级 Core 包
 - 包含 DeepSeek 的两个 Beta 接口支持：对话前缀续写（chat prefix continuation）和 FIM 补全（FIM completion）
 - 按照 DeepSeek 官方思考模式文档实现了 thinking mode，包括推理开关、推理强度控制、`reasoning_content` 处理，以及多轮对话和工具调用下的续推理语义
 
 ## 变更日志
 
-### 1.0.5
+### 1.0.6
 
+- 新增独立 `DeepSeek.Decisions` 类库，提供 Jev/System One 与 Decisions 双接口，支持文本、JSON、图片、概率读取、自动回退和诊断。
+- 新增决策单元测试和文本/图片在线用例；三个 NuGet 包统一为 `1.0.6`，程序集版本为 `1.0.6.0`。
+- `v1.0.6` tag 触发三个包的打包、校验与 NuGet trusted publishing。
+
+### 1.0.5
 - 补齐独立 `Search` / `SearchAsync`、`Fetch` / `FetchAsync`，原始响应通过 `ClientResult.GetRawResponse()` 获取。
 - 新增 `GetAnthropicFilesClient()`，复用文件操作并转换原生分页、文件大小、时间和删除结果；新增 `Before`、`MimeType`。
 - 补齐 `None/Low/High/Max` 推理、单次覆盖及显式 thinking 优先级，Chat 用户标识改用官方 `user_id`。
@@ -36,8 +42,9 @@
 ## 安装
 
 ```bash
-dotnet add package DeepSeek.Core --version 1.0.5
-dotnet add package DeepSeek.Agents.AI --version 1.0.5
+dotnet add package DeepSeek.Core --version 1.0.6
+dotnet add package DeepSeek.Agents.AI --version 1.0.6
+dotnet add package DeepSeek.Decisions --version 1.0.6
 ```
 
 核心 NuGet 包名为 `DeepSeek.Core`，公共命名空间仍保持为 `DeepSeek` 与 `DeepSeek.*`。
@@ -345,8 +352,10 @@ cp sample/appsettings.dev.json sample/appsettings.json
 
 - `src/DeepSeek.Core`：强类型 SDK
 - `src/DeepSeek.Agents.AI`：AI 抽象层适配器
+- `src/DeepSeek.Decisions`：Jev/Decisions 决策类库
 - `test/DeepSeek.Tests`：强类型 SDK 的单元测试
 - `test/DeepSeek.Agents.AI.UnitTests`：适配器的单元测试
+- `test/DeepSeek.Decisions.UnitTests`：决策类库的单元测试
 - `test/DeepSeek.IntegrationTests`：在线集成测试
 - `sample/`：仅示例项目
 
@@ -498,7 +507,7 @@ var client = new DeepSeekClient("your-api-key", clientOptions);
 
 ## NuGet 发布
 
-发布由推送 `v*` 标签触发，标签 `v1.0.5` 对应包版本 `1.0.5`。工作流 `.github/workflows/publish-nuget.yml` 使用 [NuGet Trusted Publishing](https://learn.microsoft.com/en-us/nuget/nuget-org/trusted-publishing) 和 `NuGet/login@v1`，在推送包之前通过 GitHub OIDC 获取临时 API Key，不再读取固定的 `NUGET_API_KEY` 仓库 Secret。
+发布由推送 `v*` 标签触发，标签 `v1.0.6` 对应包版本 `1.0.6`。工作流 `.github/workflows/publish-nuget.yml` 使用 [NuGet Trusted Publishing](https://learn.microsoft.com/en-us/nuget/nuget-org/trusted-publishing) 和 `NuGet/login@v1`，在推送包之前通过 GitHub OIDC 获取临时 API Key，不再读取固定的 `NUGET_API_KEY` 仓库 Secret。
 
 NuGet 策略应绑定以下值：
 
@@ -506,11 +515,11 @@ NuGet 策略应绑定以下值：
 - Repository Owner：`yuezhishun`。
 - Repository：`deepseek-sdk`。
 - Workflow：`publish-nuget.yml`，仅填写文件名。
-- 包范围：`DeepSeek.Core`、`DeepSeek.Agents.AI`。
+- 包范围：`DeepSeek.Core`、`DeepSeek.Agents.AI`、`DeepSeek.Decisions`。
 
 新策略可能显示 7 天临时激活窗口；窗口内首次成功发布后会永久激活。CI 每次发布自动取得短期密钥，无需手动复制密钥或定期更新仓库 Secret。
 
 ## 说明
 
-- 当前维护测试的范围包括 `src/DeepSeek.Core` 和 `src/DeepSeek.Agents.AI`
+- 当前维护测试的范围包括 `src/DeepSeek.Core`、`src/DeepSeek.Agents.AI` 和 `src/DeepSeek.Decisions`
 - `sample/` 下的项目仅用于示例演示，不包含专门的测试项目

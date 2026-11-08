@@ -1,16 +1,22 @@
 # deepseek-sdk
 
-当前 SDK 版本为 **1.0.5**，安装命令见下方；Microsoft Agent Framework 引用已更新至 **1.28.0**。
+当前 SDK 版本为 **1.0.6**，安装命令见下方；Microsoft Agent Framework 引用已更新至 **1.28.0**。
 
-`deepseek-sdk` is a .NET SDK for DeepSeek with two primary libraries:
+`deepseek-sdk` is a .NET SDK for DeepSeek with three primary libraries:
 
 - `src/DeepSeek.Core`: built on `System.ClientModel` and the HTTP pipeline model, providing a consistent request handling model, better control over cross-cutting concerns such as logging, retries, and diagnostics, and a stronger foundation for extensible typed SDK clients
 - `src/DeepSeek.Agents.AI`: extension and adapter support for Microsoft Agent Framework
+- `src/DeepSeek.Decisions`：从 `1.0.6` 起提供独立的 Jev/Decisions 决策类库，支持文本、JSON、图片和概率来源诊断；[中文使用说明](src/DeepSeek.Decisions/README.md)。
 - accepts model identifiers supplied by the caller, so applications can follow current and future DeepSeek model names without a Core package upgrade
 - support for DeepSeek's two Beta APIs: chat prefix continuation and FIM completion
 - implements thinking mode following DeepSeek's official documentation, including reasoning enablement, reasoning effort control, `reasoning_content` handling, and continued reasoning semantics across multi-turn conversations and tool calls
 
 ## Changelog
+
+### 1.0.6
+
+- 新增 `DeepSeek.Decisions`，提供 Jev/System One 和 Decisions 双接口、图片证据、四种概率读取方法、自动回退与诊断。
+- 新增决策单元测试及文本/图片在线用例；三个 NuGet 包统一升级到 `1.0.6` / `1.0.6.0`，通过 `v1.0.6` tag 和 NuGet trusted publishing 发布。
 
 ### 1.0.5
 
@@ -34,8 +40,9 @@
 ## Installation
 
 ```bash
-dotnet add package DeepSeek.Core --version 1.0.5
-dotnet add package DeepSeek.Agents.AI --version 1.0.5
+dotnet add package DeepSeek.Core --version 1.0.6
+dotnet add package DeepSeek.Agents.AI --version 1.0.6
+dotnet add package DeepSeek.Decisions --version 1.0.6
 ```
 
 The core NuGet package is named `DeepSeek.Core`, while the public namespaces remain `DeepSeek` and `DeepSeek.*`.
@@ -326,8 +333,10 @@ Without this file, tests use `test-key` from `sample/appsettings.dev.json` and a
 
 - `src/DeepSeek.Core`: typed SDK
 - `src/DeepSeek.Agents.AI`: AI abstraction adapter
+- `src/DeepSeek.Decisions`：Jev/Decisions 决策类库
 - `test/DeepSeek.Tests`: unit tests for the typed SDK
 - `test/DeepSeek.Agents.AI.UnitTests`: unit tests for the adapter
+- `test/DeepSeek.Decisions.UnitTests`：决策类库的单元测试
 - `test/DeepSeek.IntegrationTests`: live integration tests
 - `sample/`: example projects only
 
@@ -480,5 +489,5 @@ Notes:
 
 ## Notes
 
-- Tests are maintained for `src/DeepSeek.Core` and `src/DeepSeek.Agents.AI`.
+- 测试覆盖 `src/DeepSeek.Core`、`src/DeepSeek.Agents.AI` 和 `src/DeepSeek.Decisions`。
 - Projects under `sample/` are examples and are not covered by dedicated test projects.

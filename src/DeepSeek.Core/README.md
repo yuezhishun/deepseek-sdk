@@ -5,14 +5,19 @@ Typed .NET SDK for DeepSeek APIs, built on `System.ClientModel`.
 ## Install
 
 ```bash
-dotnet add package DeepSeek.Core --version 1.0.5
+dotnet add package DeepSeek.Core --version 1.0.6
 ```
 
-`DeepSeek.Core 1.0.5` depends on `System.ClientModel 1.14.0` and does not require Microsoft AI or AGUI packages.
+`DeepSeek.Core 1.0.6` depends on `System.ClientModel 1.14.0` and does not require Microsoft AI or AGUI packages.
 
 Model identifiers are supplied by the caller as strings. `DeepSeek.Core` does not publish a fixed model enum or constants, so model name changes do not require a Core package upgrade.
 
 ## Changelog
+
+### 1.0.6
+
+- 与 Agents、Decisions 统一升级到包版本 `1.0.6`、程序集版本 `1.0.6.0`。
+- 作为新增 `DeepSeek.Decisions` 的底层依赖，复用公开 ChatClient、图片内容、认证与 HTTP pipeline。[决策类库说明](https://github.com/yuezhishun/deepseek-sdk/tree/main/src/DeepSeek.Decisions)
 
 ### 1.0.5
 
