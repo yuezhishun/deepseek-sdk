@@ -65,8 +65,9 @@ public sealed class DecisionsIntegrationTests(DeepSeekIntegrationFixture fixture
                 new() { Text = "This is candidate image B. Is image A solid red and image B solid blue? Answer yes only if BOTH images are visible and have those colors." },
                 new() { Type = "input_image", ImageUrl = "data:image/png;base64," + Blue },
             } }],
-        }, new DecisionOptions { Method = "structured", MaxTokens = 256 }, new RequestOptions { CancellationToken = cancellation.Token });
-        Assert.True(result.Answers[0].Probability > 0.5, "模型应实际看见共享输入与题目中的两张图片。");
+        }, new DecisionOptions { Method = "structured", MaxTokens = 256, Temperature = 0 }, new RequestOptions { CancellationToken = cancellation.Token });
+        Assert.True(result.Answers[0].Probability > 0.5,
+            $"模型应实际看见共享输入与题目中的两张图片。实际概率：{result.Answers[0].Probability}；来源：{result.Diagnostics[0].ProbabilitySource}。");
     }
 
     [LiveFact]
