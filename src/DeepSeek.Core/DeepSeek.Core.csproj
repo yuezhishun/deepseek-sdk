@@ -6,16 +6,16 @@
     <LangVersion>latest</LangVersion>
     <Authors>Yue Zhishun</Authors>
     <Description>Typed DeepSeek SDK for .NET built on System.ClientModel.</Description>
-    <PackageReleaseNotes>1.0.7：配合 Agents JSON 输出修复，统一包版本与程序集版本，并更新随包说明。</PackageReleaseNotes>
+    <PackageReleaseNotes>1.0.8：完成 .NET 11 正式版 SDK 11.0.100 与运行时 11.0.0 的构建、测试和打包验证，更新随包 README，保持 netstandard2.0。</PackageReleaseNotes>
     <PackageProjectUrl>https://github.com/yuezhishun/deepseek-sdk</PackageProjectUrl>
     <RepositoryUrl>https://github.com/yuezhishun/deepseek-sdk</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>LLM,AI,DeepSeek,System.ClientModel,API,SDK,Chat,Completions,.NETStandard</PackageTags>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-    <AssemblyVersion>1.0.7.0</AssemblyVersion>
-    <FileVersion>1.0.7.0</FileVersion>
+    <AssemblyVersion>1.0.8.0</AssemblyVersion>
+    <FileVersion>1.0.8.0</FileVersion>
     <PackageIcon>logo.png</PackageIcon>
-    <Version>1.0.7</Version>
+    <Version>1.0.8</Version>
     <PackageId>DeepSeek.Core</PackageId>
     <AssemblyName>DeepSeek.Core</AssemblyName>
     <RootNamespace>DeepSeek</RootNamespace>

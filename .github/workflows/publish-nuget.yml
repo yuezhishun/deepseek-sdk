@@ -29,6 +29,7 @@ jobs:
           dotnet-version: |
             8.0.x
             10.0.x
+            11.0.100
 
       - name: Restore
         run: dotnet restore DeepSeek.slnx
@@ -43,6 +44,16 @@ jobs:
             exit 1
           fi
           dotnet test DeepSeek.slnx --configuration "$CONFIGURATION" --no-restore
+
+      - name: Test .NET 11 GA
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DEEPSEEK_REQUIRE_LIVE_TESTS: "true"
+        run: >-
+          dotnet test DeepSeek.slnx --configuration "$CONFIGURATION"
+          -p:CompatibilityTargetFramework=net11.0
+          --artifacts-path artifacts/net11
+          --logger trx --results-directory artifacts/test-results/net11
 
       - name: Resolve package version
         shell: pwsh

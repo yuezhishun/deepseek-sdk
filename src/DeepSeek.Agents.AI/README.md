@@ -5,10 +5,10 @@ Adapter package for using the DeepSeek typed client with `Microsoft.Extensions.A
 ## Install
 
 ```bash
-dotnet add package DeepSeek.Agents.AI --version 1.0.7
+dotnet add package DeepSeek.Agents.AI --version 1.0.8
 ```
 
-This package depends on `DeepSeek.Core 1.0.7`.
+This package depends on `DeepSeek.Core 1.0.8`.
 
 Model identifiers are supplied by the caller as strings. Neither this adapter nor `DeepSeek.Core` publishes a fixed model enum or constants, so model name changes do not require a package upgrade.
 
@@ -16,12 +16,14 @@ Model identifiers are supplied by the caller as strings. Neither this adapter no
 
 ## Compatibility
 
+2026-11-11 已在本机系统安装的 .NET 11 正式版下验证：SDK `11.0.100`、.NET / ASP.NET Core 运行时 `11.0.0`；适配器 199 项测试和全套 34 项在线集成测试通过，无失败或跳过。包目标继续为 `netstandard2.0`，历史发布记录中的 RC3 为当时的测试环境。
+
 The adapter is built and tested against:
 
 - `Microsoft.Agents.AI 1.28.0`
 - `Microsoft.Extensions.AI 10.11.0`
 
-以上为 2026-11-08 核对的最新稳定版；AGUI hosting 升级为 `1.28.0-preview.261106.1`。`Microsoft.Agents.AI.AGUI` 的最新版本仍为 `1.13.0-preview.260703.1`，保留该引用。新版依赖要求将 `Microsoft.Bcl.AsyncInterfaces` 同步至 `10.0.13`；SDK 包版本为 `1.0.7`。
+以上为 2026-11-08 核对的最新稳定版；AGUI hosting 升级为 `1.28.0-preview.261106.1`。`Microsoft.Agents.AI.AGUI` 的最新版本仍为 `1.13.0-preview.260703.1`，保留该引用。新版依赖要求将 `Microsoft.Bcl.AsyncInterfaces` 同步至 `10.0.13`；SDK 包版本为 `1.0.8`。
 
 版本来源：[Agent Framework 官方 NuGet](https://www.nuget.org/packages/Microsoft.Agents.AI/1.28.0)、[Microsoft.Extensions.AI 官方 NuGet](https://www.nuget.org/packages/Microsoft.Extensions.AI/10.11.0)。
 
@@ -47,6 +49,10 @@ Console.WriteLine(response.Text);
 ```
 
 ## Changelog
+
+### 1.0.8
+
+- 依赖 `DeepSeek.Core 1.0.8`，通过 .NET 11 正式版适配器与在线集成验证；更新当前兼容性说明和随包 README。
 
 ### 1.0.7
 

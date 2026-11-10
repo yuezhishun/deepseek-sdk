@@ -1,6 +1,8 @@
 # deepseek-sdk
 
-当前 SDK 版本为 **1.0.7**，安装命令见下方；Microsoft Agent Framework 引用已更新至 **1.28.0**。
+当前 SDK 版本为 **1.0.8**，安装命令见下方；Microsoft Agent Framework 引用已更新至 **1.28.0**。
+
+已完成 .NET 11 正式版兼容验证：SDK `11.0.100`、运行时 `11.0.0`，387 项测试通过且无跳过。三个库继续使用 `netstandard2.0`；[验证范围与命令](README_CN.md#net-11-与验收命令)。
 
 `deepseek-sdk` is a .NET SDK for DeepSeek with three primary libraries:
 
@@ -12,6 +14,12 @@
 - implements thinking mode following DeepSeek's official documentation, including reasoning enablement, reasoning effort control, `reasoning_content` handling, and continued reasoning semantics across multi-turn conversations and tool calls
 
 ## Changelog
+
+### 1.0.8
+
+- 完成 .NET 11 正式版兼容验证：SDK `11.0.100`、运行时 `11.0.0`，387 项测试通过，失败和跳过均为 0。
+- 发布 CI 固定安装正式版 SDK，并在默认框架测试之外增加完整的 `net11.0` 测试与 TRX 输出，使用独立构建目录。
+- 更新三个包的 README、安装命令和当前兼容性说明；包版本统一为 `1.0.8`，程序集为 `1.0.8.0`，目标框架仍为 `netstandard2.0`。
 
 ### 1.0.7
 
@@ -48,9 +56,9 @@
 ## Installation
 
 ```bash
-dotnet add package DeepSeek.Core --version 1.0.7
-dotnet add package DeepSeek.Agents.AI --version 1.0.7
-dotnet add package DeepSeek.Decisions --version 1.0.7
+dotnet add package DeepSeek.Core --version 1.0.8
+dotnet add package DeepSeek.Agents.AI --version 1.0.8
+dotnet add package DeepSeek.Decisions --version 1.0.8
 ```
 
 The core NuGet package is named `DeepSeek.Core`, while the public namespaces remain `DeepSeek` and `DeepSeek.*`.

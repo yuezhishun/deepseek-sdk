@@ -1,6 +1,6 @@
 # deepseek-sdk
 
-当前 SDK 版本为 **1.0.7**，安装命令见下方；Microsoft Agent Framework 引用已更新至 **1.28.0**。
+当前 SDK 版本为 **1.0.8**，安装命令见下方；Microsoft Agent Framework 引用已更新至 **1.28.0**。
 
 `deepseek-sdk` 是一个适用于 DeepSeek 的 .NET SDK，包含三个主要库：
 
@@ -12,6 +12,12 @@
 - 按照 DeepSeek 官方思考模式文档实现了 thinking mode，包括推理开关、推理强度控制、`reasoning_content` 处理，以及多轮对话和工具调用下的续推理语义
 
 ## 变更日志
+
+### 1.0.8
+
+- 完成 .NET 11 正式版兼容验证：SDK `11.0.100`、运行时 `11.0.0`，387 项测试通过，失败和跳过均为 0。
+- 发布 CI 固定安装正式版 SDK，并在默认框架测试之外增加完整的 `net11.0` 测试与 TRX 输出，使用独立构建目录。
+- 更新三个包的 README、安装命令和当前兼容性说明；包版本统一为 `1.0.8`，程序集为 `1.0.8.0`，目标框架仍为 `netstandard2.0`。
 
 ### 1.0.7
 
@@ -50,9 +56,9 @@
 ## 安装
 
 ```bash
-dotnet add package DeepSeek.Core --version 1.0.7
-dotnet add package DeepSeek.Agents.AI --version 1.0.7
-dotnet add package DeepSeek.Decisions --version 1.0.7
+dotnet add package DeepSeek.Core --version 1.0.8
+dotnet add package DeepSeek.Agents.AI --version 1.0.8
+dotnet add package DeepSeek.Decisions --version 1.0.8
 ```
 
 核心 NuGet 包名为 `DeepSeek.Core`，公共命名空间仍保持为 `DeepSeek` 与 `DeepSeek.*`。
@@ -85,15 +91,14 @@ var anthropicFiles = client.GetAnthropicFilesClient();
 
 ### .NET 11 与验收命令
 
-两个 NuGet 包继续使用 `netstandard2.0`，调用方可使用 .NET 11。此次验证环境为 SDK `11.0.100-rc.3.26522.148`、运行时 `11.0.0-rc.3.26522.148`；正式版发布后仍需复测，不能视为已经完成 GA 验证。默认离线测试使用 .NET 8，集成测试使用 .NET 10。
+Core、Agents、Decisions 三个 NuGet 包继续使用 `netstandard2.0`。2026-11-11 已使用本机系统安装的 .NET 11 正式版完成兼容验证：SDK `11.0.100`、.NET / ASP.NET Core 运行时 `11.0.0`；Release 全解决方案构建零警告、零错误。Core 95、Agents 199、Decisions 59、在线集成 34，共 387 项通过，失败和跳过均为 0。历史发布说明中的 RC3 为当时的验证记录。
 
-安装 .NET 11 SDK 后，可通过测试项目的可选属性运行同一组测试（不改变 SDK 包的目标框架）：
+默认离线测试仍使用 .NET 8，集成测试使用 .NET 10。CI 安装正式版 SDK `11.0.100`，在默认测试之外增加完整的 .NET 11 测试与 TRX 输出；兼容性测试使用独立输出目录。安装 [.NET 11 正式版 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/11.0) 后，可通过现有可选属性运行同一组测试，三个 SDK 库的目标框架不变：
 
 ```powershell
-dotnet test test/DeepSeek.Tests/DeepSeek.Tests.csproj -c Release -p:CompatibilityTargetFramework=net11.0
-dotnet test test/DeepSeek.Agents.AI.UnitTests/DeepSeek.Agents.AI.UnitTests.csproj -c Release -p:CompatibilityTargetFramework=net11.0
+dotnet --version # 本次验收：11.0.100
 $env:DEEPSEEK_REQUIRE_LIVE_TESTS = 'true'
-dotnet test test/DeepSeek.IntegrationTests/DeepSeek.IntegrationTests.csproj -c Release -p:CompatibilityTargetFramework=net11.0
+dotnet test DeepSeek.slnx -c Release -p:CompatibilityTargetFramework=net11.0 --artifacts-path artifacts/net11 --logger trx --results-directory artifacts/test-results/net11
 ```
 
 在线凭据优先来自环境变量 `DEEPSEEK_API_KEY`，其次为 `deepseek-api-key`，最后回退到本地 `sample/appsettings.json`。开发环境未配置时显示 xUnit 跳过；完整验收设置上述环境变量，缺少凭据直接失败。在线测试串行运行，只清理本轮创建的文件，不运行 benchmark。

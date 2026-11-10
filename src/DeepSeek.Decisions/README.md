@@ -4,12 +4,14 @@
 
 目标框架为 `netstandard2.0`，仅引用 `DeepSeek.Core`。决策在 SDK 内转换为 DeepSeek Chat Completions 调用；每道题独立调用，默认最多并发 8 道。HTTP 服务托管由使用方负责。
 
+2026-11-11 已使用 .NET 11 正式版（SDK `11.0.100`、运行时 `11.0.0`）完成兼容验证：本库 59 项单元测试通过，决策在线场景包含在全套 34 项集成测试中，无失败或跳过。
+
 ## 引用与入口
 
-源码项目为 `src/DeepSeek.Decisions/DeepSeek.Decisions.csproj`，可直接使用 `ProjectReference`。包版本为 `1.0.7`，依赖 `DeepSeek.Core 1.0.7`；NuGet 发布由仓库 `v1.0.7` tag 流程完成。
+源码项目为 `src/DeepSeek.Decisions/DeepSeek.Decisions.csproj`，可直接使用 `ProjectReference`。包版本为 `1.0.8`，依赖 `DeepSeek.Core 1.0.8`；NuGet 发布由仓库 `v1.0.8` tag 流程完成。
 
 ```bash
-dotnet add package DeepSeek.Decisions --version 1.0.7
+dotnet add package DeepSeek.Decisions --version 1.0.8
 ```
 
 ```csharp
