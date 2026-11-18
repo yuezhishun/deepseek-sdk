@@ -27,6 +27,7 @@
   <ItemGroup>
     <Compile Include="..\DeepSeekTestModels.cs" Link="DeepSeekTestModels.cs" />
     <Compile Include="..\TestApiKeyProvider.cs" Link="TestApiKeyProvider.cs" />
+    <None Update="Fixtures/ocr-inventory.pdf" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\sample\appsettings.json" Link="appsettings.json" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\sample\appsettings.json')" />
     <Content Include="..\..\sample\appsettings.dev.json" Link="appsettings.json" CopyToOutputDirectory="PreserveNewest" Condition="!Exists('..\..\sample\appsettings.json')" />
   </ItemGroup>

@@ -940,6 +940,52 @@ public class DeepSeekClientTests
     }
 
     [Fact]
+    public async Task AnthropicClient_ToolContinuation_ReplaysThinkingAndMatchesTheReturnedCallId()
+    {
+        const string assistantHistory = """
+            [{"type":"thinking","thinking":"Look up the weather.","signature":"test-signature"},
+             {"type":"tool_use","id":"toolu_weather","name":"lookup_weather","input":{"city":"Hangzhou"}}]
+            """;
+        using var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("{\"stop_reason\":\"tool_use\",\"content\":" + assistantHistory + "}", Encoding.UTF8, "application/json"),
+        });
+        using var httpClient = new HttpClient(handler);
+        var client = new AnthropicClient("deepseek-flash", "test-key", new DeepSeekClientOptions
+        {
+            Transport = new System.ClientModel.Primitives.HttpClientPipelineTransport(httpClient),
+        });
+        var question = new AnthropicMessage { Content = [new AnthropicContentBlock { Text = "Check the weather in Hangzhou." }] };
+        var first = await client.CreateMessageAsync(new AnthropicMessageRequest { Messages = [question] });
+        using var firstRaw = first.GetRawResponse();
+        var call = Assert.Single(first.Value.Content, block => block.Type == "tool_use");
+
+        var continuation = await client.CreateMessageResponseAsync(new AnthropicMessageRequest
+        {
+            Messages =
+            [
+                question,
+                new AnthropicMessage { Role = "assistant", Content = first.Value.Content },
+                new AnthropicMessage
+                {
+                    Content = [new AnthropicContentBlock { Type = "tool_result", ToolUseId = call.Id, Content = JsonValue.Create("Weather: sunny.") }],
+                },
+            ],
+        });
+        using var continuationRaw = continuation.GetRawResponse();
+
+        using var request = JsonDocument.Parse(handler.LastRequestBody!);
+        var messages = request.RootElement.GetProperty("messages");
+        Assert.Equal("assistant", messages[1].GetProperty("role").GetString());
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse(assistantHistory), JsonNode.Parse(messages[1].GetProperty("content").GetRawText())));
+        Assert.Equal("user", messages[2].GetProperty("role").GetString());
+        var toolResult = messages[2].GetProperty("content")[0];
+        Assert.Equal("tool_result", toolResult.GetProperty("type").GetString());
+        Assert.Equal("toolu_weather", toolResult.GetProperty("tool_use_id").GetString());
+        Assert.Equal("Weather: sunny.", toolResult.GetProperty("content").GetString());
+    }
+
+    [Fact]
     public async Task AnthropicClient_StreamingRequest_SendsStreamTrueInRequestBody()
     {
         var sse = "data: {\"type\":\"content_block_delta\",\"delta\":{\"text\":\"ok\"}}\n\n" +
