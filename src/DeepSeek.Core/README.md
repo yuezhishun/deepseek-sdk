@@ -5,10 +5,10 @@ Typed .NET SDK for DeepSeek APIs, built on `System.ClientModel`.
 ## Install
 
 ```bash
-dotnet add package DeepSeek.Core --version 1.0.8
+dotnet add package DeepSeek.Core --version 1.1.0
 ```
 
-`DeepSeek.Core 1.0.8` depends on `System.ClientModel 1.14.0` and does not require Microsoft AI or AGUI packages.
+`DeepSeek.Core 1.1.0` depends on `System.ClientModel 1.14.0` and does not require Microsoft AI or AGUI packages.
 
 Model identifiers are supplied by the caller as strings. `DeepSeek.Core` does not publish a fixed model enum or constants, so model name changes do not require a Core package upgrade.
 
@@ -16,9 +16,9 @@ Model identifiers are supplied by the caller as strings. `DeepSeek.Core` does no
 
 Release 1.0.8 passed 95 Core tests on .NET 11 GA (SDK 11.0.100 and runtime 11.0.0) on November 11, 2026. The package targets `netstandard2.0`.
 
-### Unreleased
+### 1.1.0
 
-The November 13 application APIs are available in the source tree. The install command above still targets the current published version.
+Version 1.1.0 adds the November 13 application APIs.
 
 The WebSocket streaming signature exposes `IAsyncEnumerable<T>`. The Core package declares `Microsoft.Bcl.AsyncInterfaces 10.0.13` so projects can compile against that signature with Core alone.
 

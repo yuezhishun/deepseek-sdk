@@ -5,10 +5,10 @@ Adapter package for using the DeepSeek typed client with `Microsoft.Extensions.A
 ## Install
 
 ```bash
-dotnet add package DeepSeek.Agents.AI --version 1.0.8
+dotnet add package DeepSeek.Agents.AI --version 1.1.0
 ```
 
-This package depends on `DeepSeek.Core 1.0.8`.
+This package depends on `DeepSeek.Core 1.1.0`.
 
 Model identifiers are supplied by the caller as strings. Neither this adapter nor `DeepSeek.Core` publishes a fixed model enum or constants, so model name changes do not require a package upgrade.
 
@@ -48,7 +48,7 @@ var response = await client.GetResponseAsync(
 Console.WriteLine(response.Text);
 ```
 
-## Application extensions (Unreleased)
+## Application extensions
 
 Use `deepseek-flash` for the November 13 tools and documents. Set the adapter defaults or override them for one call in `ChatOptions.AdditionalProperties`.
 
@@ -98,7 +98,7 @@ Streamed text remains provisional until the terminal update. On `is_refusal`, di
 
 ## Changelog
 
-### Unreleased
+### 1.1.0
 
 - Added Flash conversation options, native tool and citation streaming, multi-turn signed history, and document MIME mappings.
 - Exposed final titles, refusal metadata, and billed tool and safety counters.
