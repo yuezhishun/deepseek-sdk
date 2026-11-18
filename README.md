@@ -62,6 +62,7 @@ Console.WriteLine(answer.Text);
 - Added parsed file uploads, cross-protocol document references, and inline plain-text documents in Messages.
 - Added opt-in hosted search, URL reading, safety checks, and titles across three chat protocols. Chat and Messages also support `latest_reminder`.
 - Preserved signed tool history, citations, refusals, in-band generation errors, and final usage.
+- Updated the central Agent Framework Azure Functions and DurableTask pins to stable `1.16.0`.
 
 ### 1.0.8
 
