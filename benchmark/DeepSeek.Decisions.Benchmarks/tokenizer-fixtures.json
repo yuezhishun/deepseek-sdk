@@ -1,0 +1,50 @@
+[
+  {
+    "text": "",
+    "tokens": 0
+  },
+  {
+    "text": "Hello, world!",
+    "tokens": 4
+  },
+  {
+    "text": "中文与English混合。",
+    "tokens": 5
+  },
+  {
+    "text": "1234567890 42.50 -0.001",
+    "tokens": 12
+  },
+  {
+    "text": " café naïve é",
+    "tokens": 4
+  },
+  {
+    "text": "日本語テスト、こんにちは！",
+    "tokens": 9
+  },
+  {
+    "text": "Arabic: مرحبا بالعالم",
+    "tokens": 7
+  },
+  {
+    "text": "A\n\nB\r\n\t C  ",
+    "tokens": 8
+  },
+  {
+    "text": "🦊🔒 emoji with spaces",
+    "tokens": 9
+  },
+  {
+    "text": "<｜begin▁of▁sentence｜>Hello<｜User｜>Hi<｜Assistant｜>",
+    "tokens": 5
+  },
+  {
+    "text": "{\"noul\":0.12345678}",
+    "tokens": 10
+  },
+  {
+    "text": "{\"probabilities\":{\"A\":0.75,\"B\":0.25}}",
+    "tokens": 16
+  }
+]
