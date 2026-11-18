@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using DeepSeek.Anthropic;
@@ -106,6 +107,13 @@ internal static class DeepSeekAnthropicRequestMapper
             request.Metadata = new AnthropicMetadata { UserId = userIdValue };
         }
 
+        foreach (var type in DeepSeekChatRequestMapper.GetWebTools(options))
+        {
+            request.Tools ??= [];
+            request.Tools.Add(new AnthropicTool { Type = type, Name = type });
+        }
+        request.SafetyCheck = DeepSeekChatRequestMapper.GetSafetyCheck(options);
+        request.Title = DeepSeekChatRequestMapper.GetTitle(options);
         request.Stream = stream;
         return request;
     }
@@ -132,15 +140,28 @@ internal static class DeepSeekAnthropicRequestMapper
             message.Contents.Add(new FunctionCallContent(toolUse.Id ?? string.Empty, toolUse.Name ?? string.Empty, args));
         }
 
+        var properties = GetCompletionProperties(response);
         return new ChatResponse([message])
         {
             ModelId = response.Model,
-            AdditionalProperties = new AdditionalPropertiesDictionary
-            {
-                ["finish_reason"] = response.StopReason ?? string.Empty,
-            },
+            RawRepresentation = response,
+            AdditionalProperties = properties,
             Usage = response.Usage is null ? null : MapUsage(response.Usage),
         };
+    }
+
+    internal static AdditionalPropertiesDictionary GetCompletionProperties(AnthropicMessageResponse response)
+    {
+        var properties = new AdditionalPropertiesDictionary { ["finish_reason"] = response.StopReason ?? string.Empty };
+        object? explanation = null;
+        if (response.StopDetails is { ValueKind: JsonValueKind.Object } details)
+        {
+            properties["stop_details"] = details;
+            if (details.TryGetProperty("explanation", out var value) && value.ValueKind == JsonValueKind.String)
+                explanation = value.GetString();
+        }
+        DeepSeekChatRequestMapper.AddCompletionProperties(properties, response.Title, response.StopReason == "refusal", explanation);
+        return properties;
     }
 
     internal static UsageDetails MapUsage(AnthropicUsage usage)
@@ -152,12 +173,16 @@ internal static class DeepSeekAnthropicRequestMapper
             OutputTokenCount = usage.OutputTokens,
             TotalTokenCount = input + (usage.OutputTokens ?? 0),
             CachedInputTokenCount = usage.CacheReadInputTokens,
-            AdditionalCounts = usage.ServerToolUse is null ? null : new AdditionalPropertiesDictionary<long>(usage.ServerToolUse),
+            ReasoningTokenCount = usage.OutputTokensDetails?.ThinkingTokens ?? usage.OutputTokensDetails?.ReasoningTokens,
+            AdditionalCounts = DeepSeekChatRequestMapper.MapUsageCounts(usage.ServerToolUse, usage.OutputTokensDetails?.SafetyTokens),
         };
     }
 
     private static AnthropicMessage MapMessage(ChatMessage message)
     {
+        if (message.Role.Value == "latest_reminder")
+            return new AnthropicMessage { Role = "latest_reminder", Reminder = message.Text };
+
         var original = message.RawRepresentation as AnthropicMessageResponse
             ?? message.Contents.Select(static content => content.RawRepresentation).OfType<AnthropicMessageResponse>().LastOrDefault();
         if (message.Role == ChatRole.Assistant && original is { Content.Count: > 0 })
@@ -215,11 +240,23 @@ internal static class DeepSeekAnthropicRequestMapper
                         Source = new AnthropicImageSource { Type = "url", Url = uri.Uri.ToString() },
                     });
                     break;
-                case HostedFileContent file when file.HasTopLevelMediaType("image") || file.MediaType is null:
+                case HostedFileContent file:
                     blocks.Add(new AnthropicContentBlock
                     {
-                        Type = "image",
+                        Type = file.HasTopLevelMediaType("image") || file.MediaType is null ? "image" : "document",
                         Source = new AnthropicImageSource { Type = "file", FileId = file.FileId },
+                    });
+                    break;
+                case DataContent data when string.Equals(data.MediaType, "text/plain", StringComparison.OrdinalIgnoreCase):
+                    blocks.Add(new AnthropicContentBlock
+                    {
+                        Type = "document",
+                        Source = new AnthropicImageSource
+                        {
+                            Type = "text",
+                            MediaType = "text/plain",
+                            Data = Encoding.UTF8.GetString(data.Data.ToArray()),
+                        },
                     });
                     break;
                 case TextReasoningContent:
@@ -286,7 +323,7 @@ internal static class DeepSeekAnthropicRequestMapper
                 if (source.Data is not null) image["data"] = source.Data;
                 if (source.Url is not null) image["url"] = source.Url;
                 if (source.FileId is not null) image["file_id"] = source.FileId;
-                output.Add(new JsonObject { ["type"] = "image", ["source"] = image });
+                output.Add(new JsonObject { ["type"] = block.Type, ["source"] = image });
             }
         }
 

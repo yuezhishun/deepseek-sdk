@@ -1,45 +1,93 @@
 # deepseek-sdk
 
-当前 SDK 版本为 **1.0.8**，安装命令见下方；Microsoft Agent Framework 引用已更新至 **1.28.0**。
+The current NuGet release is **1.0.8**. The Microsoft AI adapter uses Microsoft Agent Framework **1.28.0**. [Simplified Chinese README](README_CN.md)
 
-已完成 .NET 11 正式版兼容验证：SDK `11.0.100`、运行时 `11.0.0`，387 项测试通过且无跳过。三个库继续使用 `netstandard2.0`；[验证范围与命令](README_CN.md#net-11-与验收命令)。
+Release 1.0.8 passed all 387 tests on the .NET 11 GA SDK (11.0.100) and runtime (11.0.0). All three libraries target `netstandard2.0`.
 
 `deepseek-sdk` is a .NET SDK for DeepSeek with three primary libraries:
 
 - `src/DeepSeek.Core`: built on `System.ClientModel` and the HTTP pipeline model, providing a consistent request handling model, better control over cross-cutting concerns such as logging, retries, and diagnostics, and a stronger foundation for extensible typed SDK clients
 - `src/DeepSeek.Agents.AI`: extension and adapter support for Microsoft Agent Framework
-- `src/DeepSeek.Decisions`：从 `1.0.6` 起提供独立的 Jev/Decisions 决策类库，支持文本、JSON、图片和概率来源诊断；[中文使用说明](src/DeepSeek.Decisions/README.md)。
+- `src/DeepSeek.Decisions` provides Jev and Decisions APIs for text, JSON, and images, with probability source diagnostics. [Decisions package guide](src/DeepSeek.Decisions/README.md)
 - accepts model identifiers supplied by the caller, so applications can follow current and future DeepSeek model names without a Core package upgrade
 - support for DeepSeek's two Beta APIs: chat prefix continuation and FIM completion
 - implements thinking mode following DeepSeek's official documentation, including reasoning enablement, reasoning effort control, `reasoning_content` handling, and continued reasoning semantics across multi-turn conversations and tool calls
 
+## API coverage
+
+| DeepSeek API | SDK entry point | Availability |
+| --- | --- | --- |
+| Chat Completions | `GetChatClient(model)` | 1.0.8 |
+| Chat prefix continuation (Beta) | `GetChatPrefixClient(model)` | 1.0.8 |
+| Responses | `GetResponsesClient(model)` | 1.0.8 |
+| Anthropic Messages | `GetAnthropicClient(model)` | 1.0.8 |
+| FIM completion (Beta) | `GetCompletionsClient(model)` | 1.0.8 |
+| Models and Balance | `GetModelsClient()` and `GetBalanceClient()` | 1.0.8 |
+| Search and Fetch | `Search[Async]` and `Fetch[Async]` | 1.0.8 |
+| File upload, list, retrieve, and delete | `GetFilesClient()` and `GetAnthropicFilesClient()` | 1.0.8 |
+| Parsed file uploads and references across chat protocols | Files upload purposes and protocol-specific document content | Unreleased |
+| Web, deep, and image search, URL reading, safety, and titles | Chat, Responses, and Messages request options | Unreleased |
+| OCR and speech recognition | `Ocr[Async]` and `TranscribeSpeech[Async]` | Unreleased |
+| HTTP and WebSocket speech synthesis | `SynthesizeSpeech[Async]` and `SynthesizeSpeechStreamingAsync` | Unreleased |
+
+Use `deepseek-flash` for the new conversation extensions and file inputs. Standalone tools have no model parameter. Check the model documentation for features specific to other models. [Official API directory](https://api-docs.deepseek.com/zh-cn/api/create-chat-completion/) · [November 13 announcement](https://api-docs.deepseek.com/zh-cn/news/news261113/)
+
+### Use the conversation extensions (Unreleased)
+
+Build from source for this example or see the current NuGet versions under [Installation](#installation). The three native clients support the same opt-in features through their typed requests. [Core API examples](src/DeepSeek.Core/README.md#unreleased) · [Microsoft AI options and multi-turn example](src/DeepSeek.Agents.AI/README.md#application-extensions-unreleased)
+
+```csharp
+using DeepSeek;
+using DeepSeek.Agents.AI;
+using Microsoft.Extensions.AI;
+
+var sdk = new DeepSeekClient(Environment.GetEnvironmentVariable("DEEPSEEK_API_KEY")
+    ?? throw new InvalidOperationException("Set DEEPSEEK_API_KEY."));
+using var chat = sdk.GetChatClient("deepseek-flash").AsIChatClient(new DeepSeekChatClientOptions
+{
+    EnableReadUrl = true,
+    SafetyCheckLevel = "high",
+    GenerateTitle = true,
+});
+
+var answer = await chat.GetResponseAsync([new ChatMessage(ChatRole.User, "Read https://example.com and summarize it.")]);
+Console.WriteLine(answer.Text);
+```
+
 ## Changelog
+
+### Unreleased
+
+- Added OCR, ASR, and HTTP and WebSocket TTS.
+- Added parsed file uploads, cross-protocol document references, and inline plain-text documents in Messages.
+- Added opt-in hosted search, URL reading, safety checks, and titles across three chat protocols. Chat and Messages also support `latest_reminder`.
+- Preserved signed tool history, citations, refusals, in-band generation errors, and final usage.
 
 ### 1.0.8
 
-- 完成 .NET 11 正式版兼容验证：SDK `11.0.100`、运行时 `11.0.0`，387 项测试通过，失败和跳过均为 0。
-- 发布 CI 固定安装正式版 SDK，并在默认框架测试之外增加完整的 `net11.0` 测试与 TRX 输出，使用独立构建目录。
-- 更新三个包的 README、安装命令和当前兼容性说明；包版本统一为 `1.0.8`，程序集为 `1.0.8.0`，目标框架仍为 `netstandard2.0`。
+- Verified .NET 11 GA on SDK 11.0.100 and runtime 11.0.0. All 387 tests passed.
+- Pinned the GA SDK in release CI and added full `net11.0` tests with separate build and TRX output.
+- Updated the installation instructions and package readmes. The packages use version 1.0.8 and assembly version 1.0.8.0 and target `netstandard2.0`.
 
 ### 1.0.7
 
-- 普通 JSON 与 Schema 模式统一使用精简中文提示词，保留调用方的语言要求并移除无关示例。
-- Chat、Responses、Anthropic 补齐最终 JSON / Schema 校验；Anthropic 不再忽略 `ResponseFormat`，Responses 对原生服务端不接受的数组根节点与字典 Schema 使用提示词和本地校验回退。
-- 修复 Chat、Anthropic 流式空格片段丢失；新增 138 个离线回归用例及在线覆盖，验证 .NET 11 RC3。
-- 启用 JSON 格式时，空白、非法 JSON、截断或 Schema 不匹配会抛出 `JsonException`；流式结果须完整枚举且未抛异常才算校验成功。详见 [JSON 输出说明](src/DeepSeek.Agents.AI/README.md#json-output)。
-- 三个包统一为 `1.0.7` / `1.0.7.0`；Agents 新增 MIT 许可依赖 `JsonSchema.Net 8.0.5`。
+- Unified JSON object and schema prompts in concise Chinese. String values follow the caller's requested language.
+- Validated final JSON and schemas in all three adapters. Anthropic implements `ResponseFormat` through prompting and local validation. Responses uses the same approach for schemas with non-object roots or schema-valued `additionalProperties`.
+- Preserved whitespace-only streaming fragments in Chat and Messages. Added 138 offline regression cases and live coverage on .NET 11 RC3.
+- Empty, invalid, truncated, or schema-invalid JSON produces a `JsonException`. Read the entire stream before using the validated result. [JSON output details](src/DeepSeek.Agents.AI/README.md#json-output)
+- Set package and assembly versions to 1.0.7 and 1.0.7.0. Added MIT-licensed JsonSchema.Net 8.0.5 to the adapter.
 
 ### 1.0.6
 
-- 新增 `DeepSeek.Decisions`，提供 Jev/System One 和 Decisions 双接口、图片证据、四种概率读取方法、自动回退与诊断。
-- 新增决策单元测试及文本/图片在线用例；三个 NuGet 包统一升级到 `1.0.6` / `1.0.6.0`，通过 `v1.0.6` tag 和 NuGet trusted publishing 发布。
+- Added DeepSeek.Decisions for Jev and Decisions workflows, with image evidence, four probability methods, automated fallback, and diagnostics.
+- Added decision unit tests and live text and image cases. Published the 1.0.6 packages from tag `v1.0.6` using NuGet Trusted Publishing.
 
 ### 1.0.5
 
-- 补齐独立 Search/Fetch 和 Anthropic Files，修复文件路径、图片工具结果及 Chat `user_id`。
-- 补齐 `None/Low/High/Max` 推理、选项优先级、Anthropic 流式工具参数和服务端搜索历史。
-- 统一缓存、搜索及抓取用量；保持 `netstandard2.0`，增加 .NET 11 RC3 验证，包版本仍为 `1.0.5`。
-- [新增接口、兼容性边界与 .NET 11 验收命令](README_CN.md#net-11-与验收命令)。
+- Added standalone Search and Fetch and Anthropic Files. Fixed file paths, images in tool results, and Chat `user_id`.
+- Added None, Low, High, and Max reasoning effort, option precedence, Messages tool argument assembly, and server search history replay.
+- Mapped cache, search, and fetch usage. Added .NET 11 RC3 verification for the `netstandard2.0` packages.
+- [Compatibility and .NET 11 test commands](README_CN.md#net-11-%E4%B8%8E%E9%AA%8C%E6%94%B6%E5%91%BD%E4%BB%A4)
 
 - Added typed multimodal content for Chat Completions, Responses `input_image`, and Anthropic image sources.
 - Added the OpenAI-compatible Files API client with upload, list, retrieve, and delete operations.
@@ -162,13 +210,13 @@ var details = await files.RetrieveFileAsync(file.Value.Id!);
 await files.DeleteFileAsync(file.Value.Id!);
 ```
 
-Supported image formats are JPEG, PNG, GIF, and WebP. Inline image URLs/data URLs, request body limits, and the 64 MiB Files upload limit are service limits; Files expiry is 3,600–2,592,000 seconds when configured.
+Supported image formats are JPEG, PNG, GIF, and WebP. Hosted image uploads accept up to 64 MiB. Configure OpenAI Files expiry between 3,600 and 2,592,000 seconds.
 
 For streaming, enumerate `CreateResponseStreaming(...)`. Events expose their semantic `Type`, `SequenceNumber`, typed `Item`/`ContentPart`, and terminal `Response`; the stream ends with `response.completed`, `response.incomplete`, or `response.failed`.
 
 `ChatClient` uses `response_format: { "type": "json_object" }` for Chat JSON Output. Strict function schemas are a Beta capability. `GetChatPrefixClient(...)` targets `/beta/chat/completions` and validates the final assistant message with `Prefix = true`; `CompletionsClient` targets `/beta/completions` and accepts `Prompt`, `Suffix`, `Stop`, and `Stream`.
 
-`DeepSeek.Agents.AI` 的 Chat、Responses、Anthropic 适配器均支持 `ChatOptions.ResponseFormat`，普通 JSON 与 Schema 提示词统一使用精简中文，并校验最终 JSON / Schema。Anthropic 使用提示词和本地校验实现格式约束；Responses 对服务端不接受的非对象根节点和字典 Schema 使用相同回退。流式结果需完整枚举且未抛异常后才能视为已校验，详见 [JSON 输出说明](src/DeepSeek.Agents.AI/README.md#json-output)。
+The Chat, Responses, and Anthropic adapters support `ChatOptions.ResponseFormat`. JSON object and schema prompts use concise Chinese while retaining the caller's language requirements. Anthropic uses prompting and validation. Responses uses the same fallback for non-object roots and schema-valued `additionalProperties`. Read the full stream to validate the result. [JSON output details](src/DeepSeek.Agents.AI/README.md#json-output)
 
 `AnthropicClient` targets `/anthropic/v1/messages` and supports system prompts, stop sequences, thinking, output effort, tool use/results, and the documented streaming events. DeepSeek ignores unsupported Anthropic fields such as `top_k`, while `metadata.user_id` is supported.
 
@@ -351,10 +399,10 @@ Without this file, tests use `test-key` from `sample/appsettings.dev.json` and a
 
 - `src/DeepSeek.Core`: typed SDK
 - `src/DeepSeek.Agents.AI`: AI abstraction adapter
-- `src/DeepSeek.Decisions`：Jev/Decisions 决策类库
+- `src/DeepSeek.Decisions` provides Jev and Decisions APIs.
 - `test/DeepSeek.Tests`: unit tests for the typed SDK
 - `test/DeepSeek.Agents.AI.UnitTests`: unit tests for the adapter
-- `test/DeepSeek.Decisions.UnitTests`：决策类库的单元测试
+- `test/DeepSeek.Decisions.UnitTests` contains decision unit tests.
 - `test/DeepSeek.IntegrationTests`: live integration tests
 - `sample/`: example projects only
 
@@ -507,5 +555,5 @@ Notes:
 
 ## Notes
 
-- 测试覆盖 `src/DeepSeek.Core`、`src/DeepSeek.Agents.AI` 和 `src/DeepSeek.Decisions`。
+- Tests cover Core, Agents, and Decisions.
 - Projects under `sample/` are examples and are not covered by dedicated test projects.

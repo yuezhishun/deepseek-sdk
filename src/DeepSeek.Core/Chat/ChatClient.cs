@@ -6,6 +6,7 @@ namespace DeepSeek.Chat;
 public class ChatClient
 {
     private const string ChatPath = "/chat/completions";
+    internal virtual string StreamingPath => ChatPath;
 
     protected internal ClientPipeline Pipeline { get; }
     protected internal Uri Endpoint { get; }
@@ -98,6 +99,7 @@ public class ChatClient
         ArgumentGuard.ThrowIfNull(request, nameof(request));
         request.Model = Model;
         request.Stream = true;
+        ValidateExtensions(request);
 
         return new DelegateAsyncCollectionResult<ChatCompletion>(
             ct => SendStreamingRequestAsync(request, options, ct),
@@ -113,14 +115,28 @@ public class ChatClient
 
     private async Task<ClientResult> SendStreamingRequestAsync(ChatCompletionRequest request, RequestOptions? options, CancellationToken cancellationToken)
     {
-        var uri = DeepSeekClientUtilities.CombinePath(Endpoint, ChatPath);
+        var uri = DeepSeekClientUtilities.CombinePath(Endpoint, StreamingPath);
+        if (this is ChatPrefixClient) ChatPrefixClient.ValidatePrefixRequest(request);
         var requestOptions = DeepSeekProtocol.GetStreamingRequestOptions(options, cancellationToken);
         using var message = DeepSeekProtocol.CreateRequest(Pipeline, uri, "POST", request, requestOptions, streamResponse: true);
         return await DeepSeekProtocol.SendAsync(Pipeline, message, uri).ConfigureAwait(false);
     }
 
+    private static void ValidateExtensions(ChatCompletionRequest request)
+    {
+        var extended = ConversationOptions.Validate(request.Tools?.Select(static tool => tool.Type), request.SafetyCheck, request.Title, request.ToolChoice);
+        if (extended && (request.ResponseFormat?.Type is not (null or "text") || request.Logprobs is not null || request.TopLogprobs is not null))
+            throw new ArgumentException("The DeepSeek conversation extensions require text output without logprobs.", nameof(request));
+        for (var i = 0; i < request.Messages.Count; i++)
+        {
+            if (request.Messages[i].Role == "latest_reminder")
+                ConversationOptions.ValidateReminder(request.Messages.Select(static message => message.Role).ToArray(), i, request.Messages[i].Content?.Text);
+        }
+    }
+
     protected static void ValidateRequest(ChatCompletionRequest request)
     {
+        ValidateExtensions(request);
         if (request.Messages.Count == 0)
         {
             throw new ArgumentException("At least one message is required.", nameof(request));
@@ -149,7 +165,9 @@ public sealed class ChatPrefixClient : ChatClient
         return DeepSeekProtocol.CreateRequest(Pipeline, endpoint, "POST", request, DeepSeekProtocol.GetBufferedRequestOptions(options, nameof(CompleteChatAsync)));
     }
 
-    private static void ValidatePrefixRequest(ChatCompletionRequest request)
+    internal override string StreamingPath => BetaChatPath;
+
+    internal static void ValidatePrefixRequest(ChatCompletionRequest request)
     {
         var lastMessage = request.Messages.LastOrDefault();
         if (lastMessage is null ||

@@ -10,7 +10,7 @@ public sealed class AnthropicClient
     private const string Path = "/anthropic/v1/messages";
     private static readonly HashSet<string> SupportedInputBlockTypes =
     [
-        "text", "thinking", "image", "tool_use", "tool_result", "server_tool_use", "web_search_tool_result",
+        "text", "thinking", "image", "tool_use", "tool_result", "server_tool_use", "web_search_tool_result", "web_fetch_tool_result", "document", "redacted_thinking",
     ];
     private readonly ClientPipeline _pipeline;
     private readonly Uri _endpoint;
@@ -109,8 +109,12 @@ public sealed class AnthropicClient
 
     private static void ValidateRequest(AnthropicMessageRequest request)
     {
-        foreach (var message in request.Messages)
+        ConversationOptions.Validate(request.Tools?.Select(static tool => tool.Type), request.SafetyCheck, request.Title, request.ToolChoice);
+        for (var i = 0; i < request.Messages.Count; i++)
         {
+            var message = request.Messages[i];
+            if (message.Role == "latest_reminder")
+                ConversationOptions.ValidateReminder(request.Messages.Select(static value => value.Role).ToArray(), i, message.Reminder);
             foreach (var block in message.Content)
             {
                 if (!SupportedInputBlockTypes.Contains(block.Type))
@@ -129,7 +133,7 @@ public sealed class AnthropicClient
         };
 
         if (request.Messages.Any(static message => message.Content.Any(static block =>
-            (block.Type == "image" && block.Source?.Type == "file") || ContainsFileImage(block.Content))))
+            ((block.Type is "image" or "document") && block.Source?.Type == "file") || ContainsFileImage(block.Content))))
         {
             headers["anthropic-beta"] = "files-api-2025-04-14";
         }
@@ -141,7 +145,7 @@ public sealed class AnthropicClient
     {
         if (node is JsonObject obj)
         {
-            if (obj["type"]?.GetValue<string>() == "image"
+            if (obj["type"]?.GetValue<string>() is "image" or "document"
                 && obj["source"] is JsonObject source && source["type"]?.GetValue<string>() == "file")
             {
                 return true;
@@ -168,6 +172,8 @@ public sealed class AnthropicMessageRequest
     public AnthropicOutputConfig? OutputConfig { get; set; }
     public IList<AnthropicTool>? Tools { get; set; }
     public object? ToolChoice { get; set; }
+    public SafetyCheckOptions? SafetyCheck { get; set; }
+    public ConversationTitleOptions? Title { get; set; }
 
     /// <summary>Anthropic metadata. DeepSeek uses only <see cref="AnthropicMetadata.UserId"/>.</summary>
     public AnthropicMetadata? Metadata { get; set; }
@@ -181,6 +187,9 @@ public sealed class AnthropicMessage
 {
     public string Role { get; set; } = "user";
     public IList<AnthropicContentBlock> Content { get; set; } = [];
+    /// <summary>Plain string content for the latest_reminder role.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Reminder { get; set; }
 
     [System.Text.Json.Serialization.JsonExtensionData]
     public IDictionary<string, JsonElement>? AdditionalData { get; set; }
@@ -194,6 +203,11 @@ public sealed class AnthropicContentBlock
     public string? Thinking { get; set; }
     public string? Signature { get; set; }
     public string? PartialJson { get; set; }
+    public string? Kind { get; set; }
+    public string? Title { get; set; }
+    public JsonElement? StopDetails { get; set; }
+    public IList<JsonElement>? Citations { get; set; }
+    public JsonElement? Citation { get; set; }
     public string? Id { get; set; }
     public string? Name { get; set; }
     public JsonNode? Input { get; set; }
@@ -268,6 +282,9 @@ public sealed class AnthropicMessageResponse
     public string? StopReason { get; set; }
     public string? StopSequence { get; set; }
     public IList<AnthropicContentBlock> Content { get; set; } = [];
+    public string? Title { get; set; }
+    public JsonElement? StopDetails { get; set; }
+    public Responses.ResponseError? Error { get; set; }
     public AnthropicUsage? Usage { get; set; }
 
     [System.Text.Json.Serialization.JsonExtensionData]
@@ -280,6 +297,7 @@ public sealed class AnthropicUsage
     public int? OutputTokens { get; set; }
     public int? CacheCreationInputTokens { get; set; }
     public int? CacheReadInputTokens { get; set; }
+    public Chat.TokenDetails? OutputTokensDetails { get; set; }
     public IDictionary<string, long>? ServerToolUse { get; set; }
 
     [System.Text.Json.Serialization.JsonExtensionData]
@@ -292,6 +310,7 @@ public sealed class AnthropicStreamEvent
     public AnthropicMessageResponse? Message { get; set; }
     public AnthropicContentBlock? Delta { get; set; }
     public AnthropicContentBlock? ContentBlock { get; set; }
+    public Responses.ResponseError? Error { get; set; }
     public int? Index { get; set; }
     public AnthropicUsage? Usage { get; set; }
 

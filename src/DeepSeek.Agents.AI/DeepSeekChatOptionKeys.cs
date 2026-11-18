@@ -17,6 +17,11 @@ public static class DeepSeekChatOptionKeys
     /// Non-streaming requests ignore this key.
     /// </summary>
     public const string IncludeUsage = "include_usage";
+    public const string WebSearch = "deepseek_web_search";
+    public const string ReadUrl = "deepseek_read_url";
+    public const string SafetyCheckLevel = "safety_check_level";
+    public const string GenerateTitle = "generate_title";
+
     public const string Thinking = "thinking";
     public const string ReasoningEffort = "reasoning_effort";
 

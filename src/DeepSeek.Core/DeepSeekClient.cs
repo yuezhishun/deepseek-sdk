@@ -12,9 +12,10 @@ using System.Text.Json;
 
 namespace DeepSeek;
 
-public class DeepSeekClient
+public partial class DeepSeekClient
 {
     private readonly DeepSeekClientOptions _options;
+    private readonly ApiKeyCredential? _credential;
 
     public DeepSeekClient(string apiKey)
         : this(new ApiKeyCredential(apiKey), new DeepSeekClientOptions())
@@ -34,6 +35,7 @@ public class DeepSeekClient
     public DeepSeekClient(ApiKeyCredential credential, DeepSeekClientOptions options)
         : this(DeepSeekClientUtilities.CreateAuthenticationPolicy(credential), options)
     {
+        _credential = credential;
     }
 
     public DeepSeekClient(AuthenticationPolicy authenticationPolicy)

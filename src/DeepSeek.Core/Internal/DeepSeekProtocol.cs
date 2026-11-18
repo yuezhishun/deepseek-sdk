@@ -48,6 +48,15 @@ internal static class DeepSeekProtocol
         return message;
     }
 
+    internal static PipelineMessage CreateMultipartRequest(ClientPipeline pipeline, Uri uri, MultiPartFormContent form,
+        RequestOptions options, IReadOnlyDictionary<string, string>? headers = null)
+    {
+        var message = CreateRequest(pipeline, uri, "POST", null, options, headers: headers);
+        message.Request.Content = form;
+        message.Request.Headers.Set("Content-Type", form.MediaType ?? "multipart/form-data");
+        return message;
+    }
+
     public static RequestOptions GetBufferedRequestOptions(RequestOptions? options, string operationName)
     {
         var appliedOptions = CloneRequestOptions(options);

@@ -32,6 +32,8 @@ public sealed class ResponseRequest
 
     public int? TopLogprobs { get; set; }
     public string? User { get; set; }
+    public SafetyCheckOptions? SafetyCheck { get; set; }
+    public ConversationTitleOptions? Title { get; set; }
 
     /// <summary>Preserves request fields not modeled by DeepSeek.</summary>
     [JsonExtensionData]
@@ -81,6 +83,32 @@ public sealed class ResponseInput : Collection<ResponseInputItem>
     public static implicit operator ResponseInput(ResponseInputItem[] value)
         => value is null ? throw new ArgumentNullException(nameof(value)) : new ResponseInput(value);
 
+    internal IEnumerable<(string? Type, string? Role)> GetItemKinds()
+    {
+        if (_jsonElement is { ValueKind: JsonValueKind.Object } element)
+        {
+            yield return (ResponseJsonConverterHelpers.GetString(element, "type"), ResponseJsonConverterHelpers.GetString(element, "role"));
+            yield break;
+        }
+        if (_jsonNode is JsonObject node)
+        {
+            yield return (GetString(node["type"]), GetString(node["role"]));
+            yield break;
+        }
+        if (_jsonElement is { ValueKind: JsonValueKind.Array } array)
+        {
+            foreach (var item in array.EnumerateArray())
+                yield return item.ValueKind == JsonValueKind.Object
+                    ? (ResponseJsonConverterHelpers.GetString(item, "type"), ResponseJsonConverterHelpers.GetString(item, "role"))
+                    : (null, null);
+            yield break;
+        }
+
+        foreach (var item in this) yield return (item.Type, item.Role);
+
+        static string? GetString(JsonNode? value) => value is JsonValue scalar && scalar.TryGetValue<string>(out var text) ? text : null;
+    }
+
     internal void WriteJson(Utf8JsonWriter writer, JsonSerializerOptions options)
     {
         if (_text is not null)
@@ -118,6 +146,10 @@ public class ResponseInputItem
     public IList<ResponseReasoningSummary>? Summary { get; set; }
     public string? EncryptedContent { get; set; }
     public ResponseWebSearchAction? Action { get; set; }
+    public string? Kind { get; set; }
+    public string? Signature { get; set; }
+    public JsonElement? Page { get; set; }
+    public ResponseError? Error { get; set; }
 
     [JsonExtensionData]
     public IDictionary<string, JsonElement>? AdditionalProperties { get; set; }
@@ -158,6 +190,7 @@ public class ResponseContentPart
     public string? Type { get; set; }
     public string? Text { get; set; }
     public IList<ResponseAnnotation>? Annotations { get; set; }
+    public string? Refusal { get; set; }
 
     [JsonExtensionData]
     public IDictionary<string, JsonElement>? AdditionalProperties { get; set; }
@@ -243,6 +276,12 @@ public sealed class ResponseInputImageContent : ResponseContentPart
 
     public string? Detail { get; set; }
 
+    public string? FileId { get; set; }
+}
+
+public sealed class ResponseInputFileContent : ResponseContentPart
+{
+    public ResponseInputFileContent() => Type = "input_file";
     public string? FileId { get; set; }
 }
 
@@ -403,6 +442,10 @@ public class ResponseOutputItem
     public IList<ResponseReasoningSummary>? Summary { get; set; }
     public string? EncryptedContent { get; set; }
     public ResponseWebSearchAction? Action { get; set; }
+    public string? Kind { get; set; }
+    public string? Signature { get; set; }
+    public JsonElement? Page { get; set; }
+    public ResponseError? Error { get; set; }
 
     [JsonExtensionData]
     public IDictionary<string, JsonElement>? AdditionalProperties { get; set; }
@@ -470,6 +513,7 @@ public sealed class ResponseWebSearchAction
 {
     public string? Type { get; set; }
     public string? Query { get; set; }
+    public IList<string>? Queries { get; set; }
     public string? Url { get; set; }
     public string? Pattern { get; set; }
     public IList<ResponseWebSearchSource>? Sources { get; set; }
@@ -531,6 +575,7 @@ public sealed class ResponseInputTokenDetails
 public sealed class ResponseOutputTokenDetails
 {
     public int ReasoningTokens { get; set; }
+    public int? SafetyTokens { get; set; }
 
     [JsonExtensionData]
     public IDictionary<string, JsonElement>? AdditionalProperties { get; set; }
@@ -544,6 +589,7 @@ public sealed class Response
     public string? Status { get; set; }
     public ResponseError? Error { get; set; }
     public ResponseIncompleteDetails? IncompleteDetails { get; set; }
+    public string? Title { get; set; }
     public string? Model { get; set; }
     public IList<ResponseOutputItem> Output { get; set; } = [];
     public ResponseUsage? Usage { get; set; }
@@ -578,6 +624,8 @@ public sealed class ResponseStreamEvent
     public string? CallId { get; set; }
     public string? Name { get; set; }
     public ResponseOutputItem? Item { get; set; }
+    public ResponseAnnotation? Annotation { get; set; }
+    public ResponseError? Error { get; set; }
 
     [JsonPropertyName("part")]
     public ResponseContentPart? ContentPart { get; set; }

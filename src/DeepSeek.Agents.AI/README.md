@@ -12,20 +12,20 @@ This package depends on `DeepSeek.Core 1.0.8`.
 
 Model identifiers are supplied by the caller as strings. Neither this adapter nor `DeepSeek.Core` publishes a fixed model enum or constants, so model name changes do not require a package upgrade.
 
-适配器绑定的模型由 `GetChatClient(model)`、`GetResponsesClient(model)` 或 `GetAnthropicClient(model)` 决定。`ChatOptions.ModelId` 不会重新绑定已创建的协议客户端；切换模型时应创建对应的客户端。
+`GetChatClient(model)`, `GetResponsesClient(model)`, and `GetAnthropicClient(model)` bind the model. Create a new protocol client to switch models. `ChatOptions.ModelId` leaves that binding in place.
 
 ## Compatibility
 
-2026-11-11 已在本机系统安装的 .NET 11 正式版下验证：SDK `11.0.100`、.NET / ASP.NET Core 运行时 `11.0.0`；适配器 199 项测试和全套 34 项在线集成测试通过，无失败或跳过。包目标继续为 `netstandard2.0`，历史发布记录中的 RC3 为当时的测试环境。
+Release 1.0.8 passed 199 adapter tests and 34 live integration tests on November 11, 2026 with .NET 11 GA (SDK 11.0.100, .NET and ASP.NET Core runtimes 11.0.0). The package targets `netstandard2.0`.
 
 The adapter is built and tested against:
 
 - `Microsoft.Agents.AI 1.28.0`
 - `Microsoft.Extensions.AI 10.11.0`
 
-以上为 2026-11-08 核对的最新稳定版；AGUI hosting 升级为 `1.28.0-preview.261106.1`。`Microsoft.Agents.AI.AGUI` 的最新版本仍为 `1.13.0-preview.260703.1`，保留该引用。新版依赖要求将 `Microsoft.Bcl.AsyncInterfaces` 同步至 `10.0.13`；SDK 包版本为 `1.0.8`。
+The 1.0.8 release uses the stable Microsoft AI dependencies verified on November 8, 2026, plus Microsoft.Bcl.AsyncInterfaces 10.0.13.
 
-版本来源：[Agent Framework 官方 NuGet](https://www.nuget.org/packages/Microsoft.Agents.AI/1.28.0)、[Microsoft.Extensions.AI 官方 NuGet](https://www.nuget.org/packages/Microsoft.Extensions.AI/10.11.0)。
+[Microsoft Agent Framework on NuGet](https://www.nuget.org/packages/Microsoft.Agents.AI/1.28.0) · [Microsoft.Extensions.AI on NuGet](https://www.nuget.org/packages/Microsoft.Extensions.AI/10.11.0)
 
 AGUI hosting is optional. The repository samples and integration tests use `Microsoft.Agents.AI.Hosting.AGUI.AspNetCore 1.28.0-preview.261106.1` and target .NET 10. The AGUI console sample uses `Microsoft.Agents.AI.AGUI 1.13.0-preview.260703.1`.
 
@@ -48,31 +48,84 @@ var response = await client.GetResponseAsync(
 Console.WriteLine(response.Text);
 ```
 
+## Application extensions (Unreleased)
+
+Use `deepseek-flash` for the November 13 tools and documents. Set the adapter defaults or override them for one call in `ChatOptions.AdditionalProperties`.
+
+| Adapter default | Per-call key | Effect |
+| --- | --- | --- |
+| `EnableWebSearch` | `DeepSeekChatOptionKeys.WebSearch` | Adds `deepseek_web_search`. Thinking mode enables deep search. |
+| `EnableReadUrl` | `DeepSeekChatOptionKeys.ReadUrl` | Adds `deepseek_read_url`. For explicit URL reading, disable thinking or omit the search tool. |
+| `SafetyCheckLevel` | `DeepSeekChatOptionKeys.SafetyCheckLevel` | `"high"` enables enhanced checks. `"low"` uses the default API checks. |
+| `GenerateTitle` | `DeepSeekChatOptionKeys.GenerateTitle` | Requests a title, when available, in `AdditionalProperties["title"]`. |
+
+```csharp
+using DeepSeek;
+using DeepSeek.Agents.AI;
+using Microsoft.Extensions.AI;
+
+var sdk = new DeepSeekClient(Environment.GetEnvironmentVariable("DEEPSEEK_API_KEY")
+    ?? throw new InvalidOperationException("Set DEEPSEEK_API_KEY."));
+using var client = sdk.GetResponsesClient("deepseek-flash").AsIChatClient(new DeepSeekChatClientOptions
+{
+    EnableReadUrl = true,
+    SafetyCheckLevel = "high",
+});
+using var cancellation = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+var history = new List<ChatMessage> { new(ChatRole.User, "Read https://example.com and name the page.") };
+
+var first = await client.GetStreamingResponseAsync(history, new ChatOptions
+{
+    AdditionalProperties = new AdditionalPropertiesDictionary { [DeepSeekChatOptionKeys.GenerateTitle] = true },
+}, cancellation.Token).ToChatResponseAsync();
+
+if (first.AdditionalProperties?.TryGetValue("is_refusal", out var refused) != true || refused is not true)
+{
+    history.AddRange(first.Messages);
+    history.Add(new ChatMessage(ChatRole.User, "What does that same page say the domain is for?"));
+    var second = await client.GetResponseAsync(history, cancellationToken: cancellation.Token);
+    Console.WriteLine(second.Text);
+}
+```
+
+Keep the returned assistant messages and their `RawRepresentation` for the next turn. Copying only `Text` drops the native tool history. For persistence, store the native protocol data separately. Tool progress, citations, and signed results use native representations. Only client function calls enter the function invocation pipeline. [Web tools](https://api-docs.deepseek.com/zh-cn/guides/web_tools/)
+
+`HostedFileContent` with a document MIME type maps to native file input. An image MIME type or an omitted MIME type retains the published image mapping. Use `DataContent` with media type `text/plain` for an inline plain-text document in Messages. For Chat or Messages, put `new ChatMessage(new ChatRole("latest_reminder"), "2026-11-18,Wednesday,,Web,English")` immediately before its user message. Responses rejects that role. [Document parsing](https://api-docs.deepseek.com/zh-cn/guides/document_parsing/) · [User context](https://api-docs.deepseek.com/zh-cn/guides/latest_reminder/)
+
+Use text format for the Chat and Responses extensions. Responses also requires stateless inputs and rejects incompatible tools. The legacy `HostedWebSearchTool` maps to the existing Responses and Messages tools and should be used in a separate request from the new extensions.
+
+Streamed text remains provisional until the terminal update. On `is_refusal`, discard the provisional text and use the supplied `refusal` explanation when present. Generation errors raise `InvalidDataException` with the native response in `Data["RawRepresentation"]`. A refusal bypasses JSON validation. `UsageDetails.AdditionalCounts` exposes `tool_search`, `tool_fetch`, `tool_image_search`, and `safety_tokens` when reported. Safety tokens are already included in output totals. [Content safety](https://api-docs.deepseek.com/zh-cn/guides/safety/)
+
 ## Changelog
+
+### Unreleased
+
+- Added Flash conversation options, native tool and citation streaming, multi-turn signed history, and document MIME mappings.
+- Exposed final titles, refusal metadata, and billed tool and safety counters.
 
 ### 1.0.8
 
-- 依赖 `DeepSeek.Core 1.0.8`，通过 .NET 11 正式版适配器与在线集成验证；更新当前兼容性说明和随包 README。
+- Updated the Core dependency to 1.0.8 and verified adapter and live integration tests on the .NET 11 GA SDK.
 
 ### 1.0.7
 
-- 普通 JSON 和 Schema 模式统一使用精简中文提示词，保留调用方对字符串语言的要求，移除固定的无关示例。
-- 三条适配路径增加最终 JSON / Schema 校验；Anthropic 不再忽略 `ResponseFormat`。修复 Chat、Anthropic 流式空格片段丢失。
-- 新增 MIT 许可的 `JsonSchema.Net 8.0.5` 依赖用于本地 Schema 校验，继续支持 `netstandard2.0`。
+- Unified JSON object and schema prompts in concise Chinese while retaining the requested language for string values.
+- Validated final JSON and schemas in all three adapters, including Anthropic. Preserved whitespace-only streaming fragments in Chat and Messages.
+- Added MIT-licensed JsonSchema.Net 8.0.5 for local schema validation on `netstandard2.0`.
 
 ### 1.0.6
 
-- 将 `DeepSeek.Core` 依赖、包版本与程序集版本统一为 `1.0.6` / `1.0.6.0`，与新增 Jev/Decisions 决策类库同步发布。
+- Aligned the Core dependency and package version at 1.0.6 with assembly version 1.0.6.0 alongside DeepSeek.Decisions.
 
 ### 1.0.5
 
-- 三条适配路径补齐 `ReasoningEffort.None/Low/High/ExtraHigh`（对应 none/low/high/max）；单次选项覆盖默认值，同次显式 thinking 开关优先。
-- 工具结果支持按原顺序混合文本、URL、base64、`HostedFileContent` 图片，并保留调用 ID；Anthropic 流式参数按块索引拼接完整后只输出一次调用，中断和非法 JSON 明确失败。
-- Responses、Anthropic 接受 `HostedWebSearchTool`，完整保留并回传搜索历史及未知协议数据，避免重复消息。需使用支持搜索的 Pro 模型。
-- `UsageDetails.CachedInputTokenCount` 表示缓存命中，`ReasoningTokenCount` 表示协议提供的推理计数；`AdditionalCounts` 原样保留 `tool_search`、`tool_fetch`、`web_search_requests` 等服务端计数。Anthropic 输入总量包含缓存读取和写入；流式累计用量仅在终止结果计入一次。
-- Chat 流式默认请求 usage，允许 `DeepSeekChatOptionKeys.IncludeUsage = false` 显式关闭；标准 `UsageContent` 可由 `ToChatResponseAsync()` 聚合。
-- 搜索上下文通过返回消息的 `RawRepresentation` 保留；直接回传原消息或标准流式聚合结果即可续聊。该字段不参与 JSON 序列化，跨进程持久化需要自行保存原生协议数据；修改内容时应构造新消息。
-- SDK 保持 `netstandard2.0`，验证 .NET 11 RC3（SDK `11.0.100-rc.3.26522.148`）；GA 发布后仍需复测。包版本 `1.0.5`，程序集 `1.0.5.0`，未增加直接依赖项。
+- Mapped None, Low, High, and ExtraHigh to none, low, high, and max. Per-call options override defaults. An explicit thinking switch takes precedence.
+- Preserved the order and call IDs of tool results containing text and URL, base64, or hosted images. Anthropic assembles arguments by block index and emits one function call after complete, valid JSON.
+- Responses and Anthropic accept the legacy `HostedWebSearchTool` on a supported Pro model. Search history and unknown fields travel with the returned messages.
+- `UsageDetails` exposes cached input and reasoning tokens. AdditionalCounts carries counters such as `tool_search`, `tool_fetch`, and `web_search_requests`. Messages includes cache read and write tokens in input totals. A stream reports cumulative usage once.
+- Chat requests streaming usage by default. Set `DeepSeekChatOptionKeys.IncludeUsage` to false to override. `ToChatResponseAsync()` aggregates standard `UsageContent`.
+- Replay the returned assistant messages, including messages from stream aggregation, to retain search context. Save native protocol data explicitly for cross-process persistence because JSON serialization omits `RawRepresentation`.
+- Version 1.0.5 targets `netstandard2.0` with assembly version 1.0.5.0 and was verified on .NET 11 RC3 without new direct dependencies.
 
 - Added `DataContent`, `UriContent`, and `HostedFileContent` image mapping for Chat, Responses, and Anthropic adapters.
 - Added image detail mapping through `DeepSeekChatOptionKeys.ImageDetail`.
@@ -134,16 +187,16 @@ The Responses adapter is stateless: callers provide the complete input history f
 
 ## JSON Output
 
-`ChatOptions.ResponseFormat` 在三个 `IChatClient` / `AIAgent` 适配器中均生效：
+Each `IChatClient` and `AIAgent` adapter supports `ChatOptions.ResponseFormat`.
 
-| 协议 | 普通 JSON 模式 | 带 Schema 模式 |
+| Protocol | JSON object | JSON Schema |
 | --- | --- | --- |
-| Chat | `response_format: json_object`，附加中文提示词 | 同一 JSON 模式，提示词携带原始 Schema，并在本地校验 |
-| Responses | `text.format: json_object`，附加中文提示词 | 常规对象使用原生 `json_schema`；非对象根节点或包含 Schema 类型 `additionalProperties` 时，使用 JSON 模式、Schema 提示词和本地校验回退 |
-| Anthropic | 中文提示词和本地校验 | 中文提示词携带原始 Schema，并在本地校验；不发送协议未支持的 `response_format` |
+| Chat | `response_format: json_object` and a Chinese prompt | JSON object mode with the original schema in the prompt and local validation |
+| Responses | `text.format: json_object` and a Chinese prompt | Native `json_schema` for typical objects. Other roots and schema-valued `additionalProperties` use JSON mode with prompting and local validation. |
+| Anthropic | Chinese prompt and local validation | Chinese prompt with the original schema and local validation |
 
-提示词要求只输出 JSON，禁止解释、Markdown 代码块和前后缀；字段名和枚举值不翻译，字符串内容的语言遵循调用方要求。调用方原有 `Instructions` 会保留，选项不会被修改。普通 JSON 模式要求一个对象；Schema 模式按 Schema 决定根类型，可输出数组。
+The prompt asks for a single JSON result without explanations, code fences, or other text. It preserves field and enum names and follows the caller's language choice for string values. Original instructions and options are preserved. JSON object mode requires an object. Schema mode permits any root accepted by the schema.
 
-三个适配器均检查最终结果：空白（即使正常结束）、非法 JSON、非完整终止、Schema 不匹配均抛出 `System.Text.Json.JsonException`，不自动修复或重试。取得原始响应时，可读取异常的 `Data["RawRepresentation"]`；流中断时若尚无原始响应，该值可能为空。Schema 校验使用 `JsonSchema.Net 8.0.5`，未声明方言时采用 Draft 2020-12，覆盖必填项、类型、枚举、额外字段、数组、局部 `$ref` 和组合约束；`format` 按 JSON Schema 默认语义作为注解，不额外强制校验。
+Empty, invalid, incomplete, or schema-invalid JSON raises `System.Text.Json.JsonException`. If available, the raw response is in `Data["RawRepresentation"]`. JsonSchema.Net validates Draft 2020-12 by default, including required fields, types, enums, additional properties, arrays, local references, and composition. `format` is an annotation.
 
-流式调用仍立即输出增量，只有完整枚举到结束且未抛异常，才能将聚合结果视为已校验。字符串中的空白片段会原样保留。工具调用的中间响应无需输出 JSON 文档，后续最终文本仍需满足格式要求。默认 `ResponseFormat` 与单次选项按现有规则合并，单次指定 `ChatResponseFormat.Text` 可关闭 JSON 提示词和校验。直接使用 `DeepSeek.Core` 原生协议客户端的行为不变。
+Streaming preserves whitespace and emits deltas immediately. Read through successful completion before using the validated result. Intermediate function calls can have empty text. Use a per-call `ChatResponseFormat.Text` to override a default JSON format. Core exposes native protocol responses.

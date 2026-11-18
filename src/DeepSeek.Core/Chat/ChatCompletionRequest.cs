@@ -20,9 +20,12 @@ public sealed class ChatCompletionRequest
 
     public double? Temperature { get; set; }
     public double? TopP { get; set; }
+    public SafetyCheckOptions? SafetyCheck { get; set; }
+    public ConversationTitleOptions? Title { get; set; }
     public bool? Logprobs { get; set; }
     public int? TopLogprobs { get; set; }
 
     [JsonPropertyName("user_id")]
     public string? UserId { get; set; }
+
 }

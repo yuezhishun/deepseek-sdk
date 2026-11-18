@@ -7,4 +7,5 @@ public sealed class ChatChoice
     public ChatMessage? Delta { get; set; }
     public string? FinishReason { get; set; }
     public ChatLogprobs? Logprobs { get; set; }
+    public System.Text.Json.JsonElement? ServerToolEvent { get; set; }
 }

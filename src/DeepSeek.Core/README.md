@@ -14,31 +14,100 @@ Model identifiers are supplied by the caller as strings. `DeepSeek.Core` does no
 
 ## Changelog
 
-当前 .NET 11 正式版兼容性已于 2026-11-11 验证：SDK `11.0.100`、运行时 `11.0.0`，Core 95 项测试通过，无失败或跳过；包目标仍为 `netstandard2.0`。以下发布记录保留各版本发布时的验证环境。
+Release 1.0.8 passed 95 Core tests on .NET 11 GA (SDK 11.0.100 and runtime 11.0.0) on November 11, 2026. The package targets `netstandard2.0`.
+
+### Unreleased
+
+The November 13 application APIs are available in the source tree. The install command above still targets the current published version.
+
+The WebSocket streaming signature exposes `IAsyncEnumerable<T>`. The Core package declares `Microsoft.Bcl.AsyncInterfaces 10.0.13` so projects can compile against that signature with Core alone.
+
+| API | Methods or request fields |
+| --- | --- |
+| `POST /v1/tools/ocr` | `Ocr` and `OcrAsync` take a stream, file name, and recognition purpose |
+| `POST /v1/tools/asr` | `TranscribeSpeech` and `TranscribeSpeechAsync` take a WAV or Ogg Opus stream and name |
+| `POST /v1/tools/tts` | `SynthesizeSpeech` and `SynthesizeSpeechAsync` return a WAV or PCM stream |
+| `WebSocket /v1/tools/tts` | `SynthesizeSpeechStreamingAsync` sends text fragments and returns PCM messages or raw Opus packets |
+| `/files` and `/anthropic/v1/files` | `UploadFile[Async]` supports `text_recognition` and `rich_layout_recognition` |
+| Chat, Responses, and Messages | `deepseek_web_search` and `deepseek_read_url` tools, `SafetyCheck`, and `Title` |
+
+OCR accepts files up to 100 MiB and returns original page text, zero-based page indices, per-page finish reasons, and usage. Check `OcrResult.Error` for errors that arrive after HTTP 200. ASR accepts uploads up to 8 MiB and returns text, duration in milliseconds, and a request ID. Keep ownership of the input stream. [OCR](https://api-docs.deepseek.com/zh-cn/guides/ocr/) · [ASR](https://api-docs.deepseek.com/zh-cn/guides/asr/)
+
+```csharp
+using DeepSeek;
+using DeepSeek.Tools;
+using System.ClientModel.Primitives;
+
+var sdk = new DeepSeekClient(Environment.GetEnvironmentVariable("DEEPSEEK_API_KEY")
+    ?? throw new InvalidOperationException("Set DEEPSEEK_API_KEY."));
+using var cancellation = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+var request = new RequestOptions { CancellationToken = cancellation.Token };
+
+using (var pdf = File.OpenRead("report.pdf"))
+{
+    var ocr = await sdk.OcrAsync(pdf, "report.pdf", "text_recognition", request);
+    using var raw = ocr.GetRawResponse();
+    if (ocr.Value.Error is { } error) throw new InvalidDataException(error.Message);
+    foreach (var page in ocr.Value.Pages) Console.WriteLine(page.Text);
+}
+
+var speech = await sdk.SynthesizeSpeechAsync("Hello from DeepSeek.", new SpeechSynthesisOptions { Format = "wav" }, request);
+using (var raw = speech.GetRawResponse())
+using (var wav = File.Create("speech.wav"))
+{
+    await speech.Value.CopyToAsync(wav, cancellation.Token);
+}
+
+using (var wav = File.OpenRead("speech.wav"))
+{
+    var transcript = await sdk.TranscribeSpeechAsync(wav, "speech.wav", request);
+    using var raw = transcript.GetRawResponse();
+    Console.WriteLine(transcript.Value.Text);
+}
+
+using (var pcm = File.Create("speech.pcm"))
+{
+    await foreach (var packet in sdk.SynthesizeSpeechStreamingAsync(Segments(), cancellationToken: cancellation.Token))
+        await pcm.WriteAsync(packet, cancellation.Token);
+}
+
+static async IAsyncEnumerable<string> Segments()
+{
+    yield return "Hello ";
+    await Task.Yield();
+    yield return "from DeepSeek.";
+}
+```
+
+Dispose `GetRawResponse()` after reading HTTP audio. HTTP defaults to WAV and accepts `pcm`. WebSocket defaults to 24 kHz, 16-bit mono PCM and also accepts `opus`, which returns packets without an Ogg container. Complete the WebSocket enumeration to receive the service's final status. A client constructed only with a custom authentication policy accepts an explicit `ApiKeyCredential` for WebSocket speech. [TTS protocol and limits](https://api-docs.deepseek.com/zh-cn/guides/tts/)
+
+For file inputs use `deepseek-flash`. Upload PDFs, Word, and PowerPoint files with a recognition purpose. A hosted file ID can be referenced in Chat via `ChatFileContentPart`, in Responses via `ResponseInputFileContent`, and in Messages via a `document` block with `Source.Type = "file"`. Messages also accepts a `document` source with type `text`, media type `text/plain`, and literal text in `Data`. Upload limits are 100 MiB for documents such as PDFs, 64 MiB for images, and 32 MiB for plain text, spreadsheets, and ebooks. The OpenAI client supports purpose filtering and expiry. Anthropic uses its own cursors and automatically sets the Files beta header. [Files](https://api-docs.deepseek.com/zh-cn/guides/files_api/) · [Document parsing](https://api-docs.deepseek.com/zh-cn/guides/document_parsing/)
+
+For native multi-turn requests, keep the assistant's signed `server_tool_calls` in Chat, replay Responses `output` as input items, or reuse the Messages assistant content blocks. A final `content_filter`, `incomplete_details.reason = "content_filter"`, or `stop_reason = "refusal"` means provisional streamed text must be discarded. Inspect `Error` and the terminal event for failures after HTTP 200. [Web tools and replay](https://api-docs.deepseek.com/zh-cn/guides/web_tools/) · [Model safety](https://api-docs.deepseek.com/zh-cn/guides/safety/)
 
 ### 1.0.8
 
-- 完成 .NET 11 正式版构建、测试与打包验证，保持 `netstandard2.0`；更新随包说明，统一版本 `1.0.8` / `1.0.8.0`。
+- Verified the .NET 11 GA build, tests, and packages. Updated the package readme at version 1.0.8 and assembly version 1.0.8.0.
 
 ### 1.0.7
 
-- 配合 Agents JSON 输出修复，统一包版本 `1.0.7`、程序集版本 `1.0.7.0`，并更新随包说明。
+- Published version 1.0.7 with assembly version 1.0.7.0 alongside the Microsoft AI adapter JSON output fix.
 
 ### 1.0.6
 
-- 与 Agents、Decisions 统一升级到包版本 `1.0.6`、程序集版本 `1.0.6.0`。
-- 作为新增 `DeepSeek.Decisions` 的底层依赖，复用公开 ChatClient、图片内容、认证与 HTTP pipeline。[决策类库说明](https://github.com/yuezhishun/deepseek-sdk/tree/main/src/DeepSeek.Decisions)
+- Published version 1.0.6 with assembly version 1.0.6.0 alongside Agents and Decisions.
+- DeepSeek.Decisions builds on the public Chat client, image content, authentication, and HTTP pipeline. [Decisions package guide](https://github.com/yuezhishun/deepseek-sdk/tree/main/src/DeepSeek.Decisions)
 
 ### 1.0.5
 
-- 新增 `DeepSeekClient.Search/SearchAsync(SearchRequest, RequestOptions?)`，返回 `ClientResult<IReadOnlyList<SearchResult>>`；参数包含 `Query/Count/OriginalQuestion/Localization/NeedContent`。
-- 新增 `Fetch/FetchAsync(string, RequestOptions?)`，返回 `ClientResult<FetchResult>`（标题、Markdown 正文）。原始响应统一通过 `GetRawResponse()` 获取。
-- 新增 `GetAnthropicFilesClient()`，复用同步、异步文件操作；自动发送 beta header，新增 `Before`、`MimeType`，转换大小、RFC 3339 时间及删除结果。不支持的协议选项明确报错。
-- `ChatReasoningEffort` 新增 `Low/None`，保留 `High/Max` 数值；Chat 用户字段改为 `user_id`。Responses 保持 `user`，Anthropic 保持 `metadata.user_id`。
-- 修复文件查询/删除路径及嵌套文件图片的 beta header。默认示例模型为 `deepseek-flash` / `deepseek-v4-pro`，仍接受任意模型字符串。
-- 包版本 `1.0.5`、程序集 `1.0.5.0`，目标 `netstandard2.0`；兼容性测试增加 .NET 11 RC3（SDK `11.0.100-rc.3.26522.148`），GA 尚待发布后复测。
+- Added `Search` and `SearchAsync` returning `ClientResult<IReadOnlyList<SearchResult>>`. Options include Query, Count, OriginalQuestion, Localization, and NeedContent.
+- Added `Fetch` and `FetchAsync` returning the page title and Markdown body. Use `GetRawResponse()` for the underlying HTTP response.
+- Added `GetAnthropicFilesClient()`, automatic Files beta headers, the Before cursor, and MimeType. Unsupported protocol options raise argument errors.
+- Added Low and None reasoning effort and retained High and Max values. Chat uses `user_id`, Responses uses `user`, and Anthropic uses `metadata.user_id`.
+- Fixed file retrieval and deletion paths and the beta header for nested file images. Examples use `deepseek-flash` and `deepseek-v4-pro`.
+- Version 1.0.5 targets `netstandard2.0` with assembly version 1.0.5.0 and was verified on .NET 11 RC3.
 
-搜索：`Query` / `OriginalQuestion` 为 1–128 个 Unicode 字符，`Count` 为 1–50。Fetch URL 必须为不带凭据的 HTTP(S) 地址且长度不超过 8192。文件限制为 64 MiB / 文件名 512 UTF-8 字节。Anthropic 列表仅支持互斥 `After/Before` 及 `Limit`；有效期仅用于 OpenAI Files。
+Search accepts 1–128 Unicode characters in Query and OriginalQuestion and a Count of 1–50. Fetch requires an HTTP(S) URL of at most 8192 characters without credentials. File names are limited to 512 UTF-8 bytes. Anthropic Files listing accepts either After or Before and a Limit. File expiration is available on OpenAI Files.
 
 ```csharp
 var sdk = new DeepSeek.DeepSeekClient("your-api-key");
@@ -51,7 +120,7 @@ if (search.Value.Count > 0)
 var anthropicFiles = sdk.GetAnthropicFilesClient();
 ```
 
-协议依据：[Search](https://api-docs.deepseek.com/zh-cn/api/search/)、[Fetch](https://api-docs.deepseek.com/zh-cn/api/fetch/)、[Files](https://api-docs.deepseek.com/zh-cn/guides/files_api/)（2026-11-08 复核）。
+Protocol references reviewed on November 8, 2026. [Search](https://api-docs.deepseek.com/zh-cn/api/search/) · [Fetch](https://api-docs.deepseek.com/zh-cn/api/fetch/) · [Files](https://api-docs.deepseek.com/zh-cn/guides/files_api/)
 
 - Added typed Chat image/text/file content, Responses `input_image`, Anthropic image sources, and `FilesClient`.
 - The Chat content property is now a typed string-or-parts union, which is a public API breaking change.
@@ -147,6 +216,6 @@ Keep `AllowMessageContentLogging` disabled for streaming scenarios unless body l
 - `ResponsesClient` for the stateless Responses API, including semantic SSE streaming
 - `FilesClient` for upload, listing, retrieval, and deletion of vision files
 
-Multimodal Chat content uses `ChatTextContentPart`, `ChatImageContentPart`, and `ChatFileContentPart`. Images may be HTTP(S)/data URLs or `file_id` values returned by `FilesClient`. Responses uses `ResponseInputImageContent`, and Anthropic uses `AnthropicImageSource` with `base64`, `url`, or `file` sources. JPEG, PNG, GIF, and WebP are supported; Files uploads are limited to 64 MiB and configured expiry is 3600–2592000 seconds.
+Multimodal Chat content uses `ChatTextContentPart`, `ChatImageContentPart`, and `ChatFileContentPart`. Images may be HTTP(S)/data URLs or `file_id` values returned by `FilesClient`. Responses uses `ResponseInputImageContent`, and Anthropic uses `AnthropicImageSource` with `base64`, `url`, or `file` sources. JPEG, PNG, GIF, and WebP are supported. Hosted image uploads accept up to 64 MiB. Configure OpenAI Files expiry between 3,600 and 2,592,000 seconds.
 
 The NuGet package is named `DeepSeek.Core`; the public namespaces remain `DeepSeek` and `DeepSeek.*`.

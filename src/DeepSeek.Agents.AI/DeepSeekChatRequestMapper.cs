@@ -124,6 +124,13 @@ internal static class DeepSeekChatRequestMapper
         }
 
         request.Tools = MapTools(options?.Tools);
+        foreach (var type in GetWebTools(options))
+        {
+            request.Tools ??= [];
+            request.Tools.Add(new WireChatTool { Type = type });
+        }
+        request.SafetyCheck = GetSafetyCheck(options);
+        request.Title = GetTitle(options);
         request.ToolChoice = MapToolChoice(options);
         ApplyAdditionalProperties(request, options, stream);
         request.Stream = stream;
@@ -135,6 +142,47 @@ internal static class DeepSeekChatRequestMapper
         }
 
         return request;
+    }
+
+    internal static IEnumerable<string> GetWebTools(ChatOptions? options)
+    {
+        if (GetOption(options, DeepSeekChatOptionKeys.WebSearch) is true) yield return DeepSeekChatOptionKeys.WebSearch;
+        if (GetOption(options, DeepSeekChatOptionKeys.ReadUrl) is true) yield return DeepSeekChatOptionKeys.ReadUrl;
+    }
+
+    internal static SafetyCheckOptions? GetSafetyCheck(ChatOptions? options)
+        => GetOption(options, DeepSeekChatOptionKeys.SafetyCheckLevel) is string level ? new() { Level = level } : null;
+
+    internal static ConversationTitleOptions? GetTitle(ChatOptions? options)
+        => GetOption(options, DeepSeekChatOptionKeys.GenerateTitle) is bool enabled ? new() { Enabled = enabled } : null;
+
+    private static object? GetOption(ChatOptions? options, string key)
+        => options?.AdditionalProperties?.TryGetValue(key, out var value) == true ? value : null;
+
+    internal static AdditionalPropertiesDictionary<long>? MapUsageCounts(IDictionary<string, long>? tools, int? safetyTokens)
+    {
+        var counts = tools is null ? null : new AdditionalPropertiesDictionary<long>(tools);
+        if (safetyTokens is { } count)
+        {
+            counts ??= [];
+            counts["safety_tokens"] = count;
+        }
+        return counts;
+    }
+
+    internal static void AddCompletionProperties(AdditionalPropertiesDictionary properties, string? title, bool refused, object? explanation)
+    {
+        if (title is not null) properties["title"] = title;
+        if (refused) properties["is_refusal"] = true;
+        if (explanation is not null) properties["refusal"] = explanation;
+    }
+
+    internal static void ThrowGenerationError(string protocol, object raw, Responses.ResponseError? error)
+    {
+        var exception = new InvalidDataException(error?.Message ?? $"The {protocol} service failed to generate a response.");
+        exception.Data["RawRepresentation"] = raw;
+        if ((error?.Code ?? error?.Type) is { } code) exception.Data["code"] = code;
+        throw exception;
     }
 
     internal static string? BuildInstructions(string? instructions, ChatResponseFormatJson? responseFormat)
@@ -248,6 +296,7 @@ internal static class DeepSeekChatRequestMapper
         var result = new ChatResponse(new[] { assistant })
         {
             ModelId = response.Model,
+            RawRepresentation = response,
             AdditionalProperties = new AdditionalPropertiesDictionary(),
         };
 
@@ -258,6 +307,8 @@ internal static class DeepSeekChatRequestMapper
         }
 
         var finishReason = choice?.FinishReason;
+        AddCompletionProperties(result.AdditionalProperties, message?.Title, finishReason == "content_filter" || message?.Refusal is not null, message?.Refusal);
+        if (message?.Annotations is not null) result.AdditionalProperties["annotations"] = message.Annotations;
         if (!string.IsNullOrWhiteSpace(finishReason))
         {
             result.AdditionalProperties["finish_reason"] = finishReason;
@@ -274,9 +325,19 @@ internal static class DeepSeekChatRequestMapper
             TotalTokenCount = usage.TotalTokens,
             CachedInputTokenCount = usage.PromptCacheHitTokens ?? usage.PromptTokensDetails?.CachedTokens,
             ReasoningTokenCount = usage.CompletionTokensDetails?.ReasoningTokens,
-            AdditionalCounts = usage.PromptCacheMissTokens is { } misses
-                ? new AdditionalPropertiesDictionary<long> { ["prompt_cache_miss_tokens"] = misses } : null,
+            AdditionalCounts = MapChatUsageCounts(usage),
         };
+
+    private static AdditionalPropertiesDictionary<long>? MapChatUsageCounts(TokenUsage usage)
+    {
+        var counts = MapUsageCounts(usage.ServerToolUse, usage.CompletionTokensDetails?.SafetyTokens);
+        if (usage.PromptCacheMissTokens is { } misses)
+        {
+            counts ??= [];
+            counts["prompt_cache_miss_tokens"] = misses;
+        }
+        return counts;
+    }
 
     private static IEnumerable<WireChatMessage> MapMessages(AiChatMessage message, ChatOptions? options)
     {
@@ -284,6 +345,12 @@ internal static class DeepSeekChatRequestMapper
         if (message.Role == ChatRole.System)
         {
             yield return new WireChatMessage { Role = "system", Content = MapContent(message, detail) };
+            yield break;
+        }
+
+        if (message.Role.Value == "latest_reminder")
+        {
+            yield return new WireChatMessage { Role = "latest_reminder", Content = message.Text ?? string.Empty };
             yield break;
         }
 
@@ -319,6 +386,22 @@ internal static class DeepSeekChatRequestMapper
                 };
             }
 
+            yield break;
+        }
+
+        var original = message.RawRepresentation as WireChatMessage
+            ?? message.Contents.Select(static content => content.RawRepresentation).OfType<WireChatMessage>().LastOrDefault();
+        if (original is { ServerToolCalls.Count: > 0 })
+        {
+            yield return new WireChatMessage
+            {
+                Role = "assistant",
+                Content = original.Content,
+                ReasoningContent = original.ReasoningContent,
+                ToolCalls = original.ToolCalls,
+                ServerToolCalls = original.ServerToolCalls,
+                AdditionalProperties = original.AdditionalProperties,
+            };
             yield break;
         }
 
@@ -362,9 +445,10 @@ internal static class DeepSeekChatRequestMapper
                 case UriContent uri when uri.HasTopLevelMediaType("image"):
                     parts.Add(new ChatImageContentPart(uri.Uri.ToString(), detail));
                     break;
-                case HostedFileContent file when file.HasTopLevelMediaType("image") || file.MediaType is null:
+                case HostedFileContent file:
                     parts.Add(new ChatFileContentPart(file.FileId));
                     break;
+                case AIContent raw when raw.GetType() == typeof(AIContent) && raw.RawRepresentation is WireChatMessage:
                 case TextReasoningContent:
                 case FunctionCallContent:
                 case FunctionResultContent:

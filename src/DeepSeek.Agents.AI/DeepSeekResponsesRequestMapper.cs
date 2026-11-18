@@ -26,6 +26,13 @@ internal static class DeepSeekResponsesRequestMapper
             Stream = stream,
         };
 
+        foreach (var type in DeepSeekChatRequestMapper.GetWebTools(options))
+        {
+            request.Tools ??= [];
+            request.Tools.Add(new ResponseTool { Type = type });
+        }
+        request.SafetyCheck = DeepSeekChatRequestMapper.GetSafetyCheck(options);
+        request.Title = DeepSeekChatRequestMapper.GetTitle(options);
         ApplyAdditionalProperties(request, options);
         return request;
     }
@@ -70,12 +77,14 @@ internal static class DeepSeekResponsesRequestMapper
         var result = new ChatResponse([message])
         {
             ModelId = response.Model,
+            RawRepresentation = response,
             AdditionalProperties = new AdditionalPropertiesDictionary
             {
                 ["response_status"] = response.Status ?? string.Empty,
             },
         };
 
+        AddCompletionProperties(result.AdditionalProperties!, response);
         if (response.Usage is not null)
         {
             result.Usage = MapUsage(response.Usage);
@@ -137,6 +146,7 @@ internal static class DeepSeekResponsesRequestMapper
         if (eventData.Response is not null)
         {
             properties["response"] = eventData.Response;
+            AddCompletionProperties(properties, eventData.Response);
             if (eventData.Response.Usage is not null)
             {
                 properties["usage_total_tokens"] = eventData.Response.Usage.TotalTokens;
@@ -170,8 +180,18 @@ internal static class DeepSeekResponsesRequestMapper
             TotalTokenCount = usage.TotalTokens,
             CachedInputTokenCount = usage.InputTokensDetails?.CachedTokens,
             ReasoningTokenCount = usage.OutputTokensDetails?.ReasoningTokens,
-            AdditionalCounts = usage.ServerToolUse is null ? null : new AdditionalPropertiesDictionary<long>(usage.ServerToolUse),
+            AdditionalCounts = DeepSeekChatRequestMapper.MapUsageCounts(usage.ServerToolUse, usage.OutputTokensDetails?.SafetyTokens),
         };
+
+    internal static bool IsRefused(Response? response)
+        => response?.IncompleteDetails?.Reason == "content_filter"
+            || response?.Output.Any(static item => item.Content.Any(static part => part.Type == "refusal")) == true;
+
+    private static void AddCompletionProperties(AdditionalPropertiesDictionary properties, Response response)
+    {
+        var refusal = response.Output.SelectMany(static item => item.Content).FirstOrDefault(static part => part.Type == "refusal")?.Refusal;
+        DeepSeekChatRequestMapper.AddCompletionProperties(properties, response.Title, IsRefused(response), refusal);
+    }
 
     internal static ChatResponseUpdate MapRawEvent(ResponseStreamEvent eventData)
         => new(ChatRole.Assistant, (string?)null)
@@ -192,6 +212,9 @@ internal static class DeepSeekResponsesRequestMapper
         var detail = GetImageDetail(options);
         foreach (var message in messages)
         {
+            if (message.Role.Value == "latest_reminder")
+                throw new NotSupportedException("The Responses API does not support latest_reminder messages.");
+
             var original = message.RawRepresentation as Response
                 ?? message.Contents.Select(static content => content.RawRepresentation).OfType<Response>().LastOrDefault();
             if (message.Role == ChatRole.Assistant && original is { Output.Count: > 0 })
@@ -211,6 +234,10 @@ internal static class DeepSeekResponsesRequestMapper
                     Summary = item.Summary,
                     EncryptedContent = item.EncryptedContent,
                     Action = item.Action,
+                    Kind = item.Kind,
+                    Signature = item.Signature,
+                    Page = item.Page,
+                    Error = item.Error,
                     AdditionalProperties = item.AdditionalProperties,
                 }));
                 continue;
@@ -292,6 +319,9 @@ internal static class DeepSeekResponsesRequestMapper
                     break;
                 case HostedFileContent file when file.HasTopLevelMediaType("image") || file.MediaType is null:
                     parts.Add(new ResponseInputImageContent { FileId = file.FileId, Detail = detail });
+                    break;
+                case HostedFileContent file:
+                    parts.Add(new ResponseInputFileContent { FileId = file.FileId });
                     break;
                 case TextReasoningContent:
                 case FunctionCallContent:

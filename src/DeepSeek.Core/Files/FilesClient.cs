@@ -1,7 +1,6 @@
 using System.ClientModel;
 using System.ClientModel.Primitives;
 using System.Globalization;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -10,7 +9,6 @@ namespace DeepSeek.Files;
 public sealed class FilesClient
 {
     private const string FilesPath = "/files";
-    private const int MaximumUploadBytes = 64 * 1024 * 1024;
     private const int MinimumExpirySeconds = 3600;
     private const int MaximumExpirySeconds = 2592000;
     private readonly ClientPipeline _pipeline;
@@ -69,16 +67,10 @@ public sealed class FilesClient
         FileUploadOptions? options = null,
         RequestOptions? requestOptions = null)
     {
-        ArgumentGuard.ThrowIfNull(stream, nameof(stream));
-        ArgumentGuard.ThrowIfNullOrWhiteSpace(fileName, nameof(fileName));
-        ValidateFileName(fileName);
-        if (!stream.CanRead)
-        {
-            throw new ArgumentException("The stream must be readable.", nameof(stream));
-        }
+        DeepSeekUpload.ValidateFileName(fileName);
         ValidateUploadOptions(options);
 
-        using var data = CopyToMemory(stream);
+        using var data = DeepSeekUpload.Read(stream, GetUploadLimit(fileName, options?.Purpose), requestOptions?.CancellationToken ?? CancellationToken.None);
         using var form = CreateMultipart(data, fileName, options);
         using var message = CreateMultipartRequest(form, requestOptions);
         return ReadResult<DeepSeekFile>(DeepSeekProtocol.Send(_pipeline, message, GetFilesUri()));
@@ -90,16 +82,10 @@ public sealed class FilesClient
         FileUploadOptions? options = null,
         RequestOptions? requestOptions = null)
     {
-        ArgumentGuard.ThrowIfNull(stream, nameof(stream));
-        ArgumentGuard.ThrowIfNullOrWhiteSpace(fileName, nameof(fileName));
-        ValidateFileName(fileName);
-        if (!stream.CanRead)
-        {
-            throw new ArgumentException("The stream must be readable.", nameof(stream));
-        }
+        DeepSeekUpload.ValidateFileName(fileName);
         ValidateUploadOptions(options);
 
-        using var data = await CopyToMemoryAsync(stream, requestOptions?.CancellationToken ?? CancellationToken.None).ConfigureAwait(false);
+        using var data = await DeepSeekUpload.ReadAsync(stream, GetUploadLimit(fileName, options?.Purpose), requestOptions?.CancellationToken ?? CancellationToken.None).ConfigureAwait(false);
         using var form = CreateMultipart(data, fileName, options);
         using var message = CreateMultipartRequest(form, requestOptions);
         return ReadResult<DeepSeekFile>(await DeepSeekProtocol.SendAsync(_pipeline, message, GetFilesUri()).ConfigureAwait(false));
@@ -184,31 +170,18 @@ public sealed class FilesClient
     }
 
     private PipelineMessage CreateMultipartRequest(MultiPartFormContent form, RequestOptions? requestOptions)
-    {
-        var uri = GetFilesUri();
-        var message = _pipeline.CreateMessage(uri, "POST", PipelineMessageClassifier.Default);
-        message.Request.Content = form;
-        message.Request.Headers.Set("Content-Type", form.MediaType ?? "multipart/form-data");
-        if (_anthropic)
-        {
-            message.Request.Headers.Set("anthropic-beta", "files-api-2025-04-14");
-        }
-        message.Apply(DeepSeekProtocol.GetBufferedRequestOptions(requestOptions, nameof(UploadFileAsync)));
-        return message;
-    }
+        => DeepSeekProtocol.CreateMultipartRequest(_pipeline, GetFilesUri(), form,
+            DeepSeekProtocol.GetBufferedRequestOptions(requestOptions, nameof(UploadFileAsync)), CreateHeaders());
 
     private MultiPartFormContent CreateMultipart(MemoryStream data, string fileName, FileUploadOptions? options)
     {
         var form = new MultiPartFormContent();
-        var file = new FileBinaryContent(data, "application/octet-stream")
-        {
-            Filename = fileName,
-        };
-        form.Add("file", file);
-        if (!_anthropic)
+        if (!_anthropic || options?.Purpose is "text_recognition" or "rich_layout_recognition")
         {
             form.Add("purpose", options?.Purpose ?? "user_data", "text/plain");
         }
+
+        DeepSeekUpload.AddFile(form, data, fileName);
 
         if (options?.ExpiresAfterSeconds is { } seconds)
         {
@@ -256,73 +229,21 @@ public sealed class FilesClient
         }
     }
 
-    private static MemoryStream CopyToMemory(Stream stream)
+    private static bool IsSupportedPurpose(string? purpose)
+        => purpose is "user_data" or "text_recognition" or "rich_layout_recognition";
+
+    private static int GetUploadLimit(string fileName, string? purpose)
     {
-        var data = new MemoryStream();
-        var buffer = new byte[81920];
-        while (data.Length < MaximumUploadBytes)
+        var extension = Path.GetExtension(fileName).ToLowerInvariant();
+        var sizeMiB = extension switch
         {
-            var count = stream.Read(buffer, 0, Math.Min(buffer.Length, MaximumUploadBytes - (int)data.Length));
-            if (count == 0)
-            {
-                break;
-            }
-
-            AppendToMemory(data, buffer, count);
-        }
-
-        if (data.Length == MaximumUploadBytes && stream.ReadByte() != -1)
-        {
-            throw new InvalidDataException("The file exceeds the maximum upload size of 64 MiB.");
-        }
-
-        data.Position = 0;
-        return data;
-    }
-
-    private static async Task<MemoryStream> CopyToMemoryAsync(Stream stream, CancellationToken cancellationToken)
-    {
-        var data = new MemoryStream();
-        var buffer = new byte[81920];
-        while (data.Length < MaximumUploadBytes)
-        {
-            var count = await stream.ReadAsync(
-                buffer,
-                0,
-                Math.Min(buffer.Length, MaximumUploadBytes - (int)data.Length),
-                cancellationToken).ConfigureAwait(false);
-            if (count == 0)
-            {
-                break;
-            }
-
-            AppendToMemory(data, buffer, count);
-        }
-
-        if (data.Length == MaximumUploadBytes)
-        {
-            var extraByte = new byte[1];
-            if (await stream.ReadAsync(extraByte, 0, 1, cancellationToken).ConfigureAwait(false) != 0)
-            {
-                throw new InvalidDataException("The file exceeds the maximum upload size of 64 MiB.");
-            }
-        }
-
-        data.Position = 0;
-        return data;
-    }
-
-    private static void AppendToMemory(MemoryStream data, byte[] buffer, int count)
-    {
-        var requiredCapacity = checked(data.Length + count);
-        if (requiredCapacity > data.Capacity)
-        {
-            var doubledCapacity = Math.Min((long)data.Capacity * 2, MaximumUploadBytes);
-            var capacity = Math.Max(requiredCapacity, Math.Max(doubledCapacity, buffer.Length));
-            data.Capacity = (int)Math.Min(capacity, MaximumUploadBytes);
-        }
-
-        data.Write(buffer, 0, count);
+            ".pdf" or ".doc" or ".docx" or ".ppt" or ".pptx" => 100,
+            ".jpg" or ".jpeg" or ".png" or ".gif" or ".webp" or ".bmp" or ".tif" or ".tiff" => 64,
+            ".txt" or ".md" or ".csv" or ".json" or ".xml" or ".html" or ".log" or ".cs" or ".py" or ".js"
+                or ".xlsx" or ".xls" or ".epub" or ".mobi" => 32,
+            _ => purpose is "text_recognition" or "rich_layout_recognition" ? 100 : 64,
+        };
+        return sizeMiB * 1024 * 1024;
     }
 
     private void ValidateUploadOptions(FileUploadOptions? options)
@@ -332,9 +253,9 @@ public sealed class FilesClient
             return;
         }
 
-        if (!string.Equals(options.Purpose, "user_data", StringComparison.Ordinal))
+        if (!IsSupportedPurpose(options.Purpose))
         {
-            throw new ArgumentException("Purpose must be 'user_data'.", nameof(options));
+            throw new ArgumentException("Purpose must be 'user_data', 'text_recognition', or 'rich_layout_recognition'.", nameof(options));
         }
 
         if (_anthropic && (options.ExpiresAfterSeconds is not null || options.ExpiresAfterAnchor is not null))
@@ -388,22 +309,14 @@ public sealed class FilesClient
             throw new ArgumentException("Order must be 'asc' or 'desc'.", nameof(options));
         }
 
-        if (options.Purpose is not null && !string.Equals(options.Purpose, "user_data", StringComparison.Ordinal))
+        if (options.Purpose is not null && !IsSupportedPurpose(options.Purpose))
         {
-            throw new ArgumentException("Purpose must be 'user_data'.", nameof(options));
+            throw new ArgumentException("Purpose must be 'user_data', 'text_recognition', or 'rich_layout_recognition'.", nameof(options));
         }
     }
 
     private static void ValidateFileId(string fileId)
         => ArgumentGuard.ThrowIfNullOrWhiteSpace(fileId, nameof(fileId));
-
-    private static void ValidateFileName(string fileName)
-    {
-        if (Encoding.UTF8.GetByteCount(fileName) > 512)
-        {
-            throw new ArgumentException("A file name must not exceed 512 UTF-8 bytes.", nameof(fileName));
-        }
-    }
 
     private Dictionary<string, string>? CreateHeaders()
         => _anthropic ? new() { ["anthropic-beta"] = "files-api-2025-04-14" } : null;

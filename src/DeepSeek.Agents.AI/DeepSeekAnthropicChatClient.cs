@@ -41,10 +41,14 @@ public sealed class DeepSeekAnthropicChatClient : IChatClient
         {
             CancellationToken = cancellationToken,
         }).ConfigureAwait(false);
+        if (response.Value.Error is not null || response.Value.Type == "error")
+            DeepSeekChatRequestMapper.ThrowGenerationError("Messages", response.Value, response.Value.Error);
+
         var result = DeepSeekAnthropicRequestMapper.MapResponse(response.Value);
-        DeepSeekChatRequestMapper.ValidateJsonResponse(result.Text, merged, response.Value,
-            response.Value.StopReason is "end_turn" or "stop_sequence" or "tool_use",
-            response.Value.Content.Any(static block => block.Type == "tool_use"));
+        if (response.Value.StopReason != "refusal")
+            DeepSeekChatRequestMapper.ValidateJsonResponse(result.Text, merged, response.Value,
+                response.Value.StopReason is "end_turn" or "stop_sequence" or "tool_use",
+                response.Value.Content.Any(static block => block.Type == "tool_use"));
         return result;
     }
 
@@ -87,19 +91,36 @@ public sealed class DeepSeekAnthropicChatClient : IChatClient
             {
                 blocks[index] = block;
                 active.Add(index);
+                if (block.Type is "server_tool_use" or "web_search_tool_result" or "web_fetch_tool_result")
+                    yield return new ChatResponseUpdate(ChatRole.Assistant, (string?)null) { RawRepresentation = chunk };
                 if (block.Type is "tool_use" or "server_tool_use") arguments[index] = new StringBuilder();
             }
 
             var delta = chunk.Delta;
             if (delta?.StopReason is not null) response.StopReason = delta.StopReason;
             if (delta?.StopSequence is not null) response.StopSequence = delta.StopSequence;
+            if (delta?.Title is not null) response.Title = delta.Title;
+            if (delta?.StopDetails is not null) response.StopDetails = delta.StopDetails;
             if (delta?.PartialJson is { } fragment && arguments.TryGetValue(index, out var buffer)) buffer.Append(fragment);
-            if (blocks.TryGetValue(index, out var current))
+            if (chunk.Type == "content_block_delta" && blocks.TryGetValue(index, out var current))
             {
                 if (delta?.Thinking is { } thinkingDelta) current.Thinking = (current.Thinking ?? string.Empty) + thinkingDelta;
                 if (delta?.Text is { } textDelta) current.Text = (current.Text ?? string.Empty) + textDelta;
                 if (delta?.Signature is { } signature) current.Signature = signature;
+                if (delta?.Citation is { } citation)
+                {
+                    current.Citations ??= [];
+                    current.Citations.Add(citation);
+                    yield return new ChatResponseUpdate(ChatRole.Assistant, (string?)null) { RawRepresentation = chunk };
+                }
+                if (delta?.AdditionalData is not null)
+                {
+                    current.AdditionalData ??= new Dictionary<string, JsonElement>();
+                    foreach (var pair in delta.AdditionalData) current.AdditionalData[pair.Key] = pair.Value;
+                }
             }
+            if (chunk.Type == "message_delta" && delta?.AdditionalData is { Count: > 0 })
+                yield return new ChatResponseUpdate(ChatRole.Assistant, (string?)null) { RawRepresentation = chunk };
 
             var thinking = delta?.Thinking;
             if (!string.IsNullOrWhiteSpace(thinking))
@@ -150,24 +171,30 @@ public sealed class DeepSeekAnthropicChatClient : IChatClient
                 }
             }
 
-            if (chunk.Type == "error")
-            {
-                throw new InvalidDataException("The Anthropic stream returned an error event.");
-            }
+            if (chunk.Type == "error" || chunk.Error is not null)
+                DeepSeekChatRequestMapper.ThrowGenerationError("Messages", chunk, chunk.Error);
 
             if (chunk.Type == "message_stop")
             {
                 if (active.Count > 0) throw new InvalidDataException("The Anthropic message ended with incomplete content blocks.");
                 if (blocks.Count > 0) response.Content = blocks.Values.ToList();
                 response.Usage = hasUsage ? usage : null;
-                DeepSeekChatRequestMapper.ValidateJsonResponse(
-                    string.Concat(response.Content.Where(static block => block.Type == "text").Select(static block => block.Text)),
-                    merged, response, response.StopReason is "end_turn" or "stop_sequence" or "tool_use",
-                    response.Content.Any(static block => block.Type == "tool_use"));
+                if (response.StopReason == "refusal")
+                {
+                    response.Content = response.Content.Where(static block => block.Type is not ("text" or "thinking" or "redacted_thinking")).ToList();
+                    response.Content.Add(new AnthropicContentBlock { Type = "text", Text = string.Empty });
+                }
+                else
+                {
+                    DeepSeekChatRequestMapper.ValidateJsonResponse(
+                        string.Concat(response.Content.Where(static block => block.Type == "text").Select(static block => block.Text)),
+                        merged, response, response.StopReason is "end_turn" or "stop_sequence" or "tool_use",
+                        response.Content.Any(static block => block.Type == "tool_use"));
+                }
                 var update = new ChatResponseUpdate(ChatRole.Assistant, (string?)null)
                 {
                     RawRepresentation = response,
-                    AdditionalProperties = new AdditionalPropertiesDictionary { ["finish_reason"] = response.StopReason },
+                    AdditionalProperties = DeepSeekAnthropicRequestMapper.GetCompletionProperties(response),
                 };
                 if (hasUsage) update.Contents.Add(new UsageContent(DeepSeekAnthropicRequestMapper.MapUsage(usage)));
                 if (response.Content.Count > 0) update.Contents.Add(new AIContent { RawRepresentation = response });
@@ -193,6 +220,13 @@ public sealed class DeepSeekAnthropicChatClient : IChatClient
         target.OutputTokens = update.OutputTokens ?? target.OutputTokens;
         target.CacheReadInputTokens = update.CacheReadInputTokens ?? target.CacheReadInputTokens;
         target.CacheCreationInputTokens = update.CacheCreationInputTokens ?? target.CacheCreationInputTokens;
+        if (update.OutputTokensDetails is { } details)
+        {
+            target.OutputTokensDetails ??= new DeepSeek.Chat.TokenDetails();
+            target.OutputTokensDetails.SafetyTokens = details.SafetyTokens ?? target.OutputTokensDetails.SafetyTokens;
+            target.OutputTokensDetails.ThinkingTokens = details.ThinkingTokens ?? target.OutputTokensDetails.ThinkingTokens;
+            target.OutputTokensDetails.ReasoningTokens = details.ReasoningTokens ?? target.OutputTokensDetails.ReasoningTokens;
+        }
         if (update.ServerToolUse is not null)
         {
             target.ServerToolUse ??= new Dictionary<string, long>();

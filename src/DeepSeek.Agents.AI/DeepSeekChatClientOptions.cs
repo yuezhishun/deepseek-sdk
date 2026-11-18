@@ -26,6 +26,10 @@ public sealed class DeepSeekChatClientOptions
     public string? ToolChoiceName { get; set; }
     public string? UserId { get; set; }
     public string? ImageDetail { get; set; }
+    public bool? EnableWebSearch { get; set; }
+    public bool? EnableReadUrl { get; set; }
+    public string? SafetyCheckLevel { get; set; }
+    public bool? GenerateTitle { get; set; }
     public AdditionalPropertiesDictionary? AdditionalProperties { get; set; }
 
     internal ChatOptions ToChatOptions()
@@ -90,6 +94,19 @@ public sealed class DeepSeekChatClientOptions
         {
             additionalProperties ??= [];
             additionalProperties[DeepSeekChatOptionKeys.ImageDetail] = ImageDetail;
+        }
+
+        foreach (var (key, value) in new (string, object?)[]
+        {
+            (DeepSeekChatOptionKeys.WebSearch, EnableWebSearch),
+            (DeepSeekChatOptionKeys.ReadUrl, EnableReadUrl),
+            (DeepSeekChatOptionKeys.SafetyCheckLevel, SafetyCheckLevel),
+            (DeepSeekChatOptionKeys.GenerateTitle, GenerateTitle),
+        })
+        {
+            if (value is null) continue;
+            additionalProperties ??= [];
+            additionalProperties[key] = value;
         }
 
         options.AdditionalProperties = additionalProperties;

@@ -1,8 +1,10 @@
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using DeepSeek.Anthropic;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using DeepSeek.Chat;
 using DeepSeek.Responses;
 using static DeepSeek.ResponseJsonConverterHelpers;
@@ -21,6 +23,18 @@ internal static class DeepSeekJson
             PropertyNameCaseInsensitive = true,
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
             Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            TypeInfoResolver = new DefaultJsonTypeInfoResolver
+            {
+                Modifiers =
+                {
+                    static info =>
+                    {
+                        if (info.Type == typeof(ChatTool))
+                            info.Properties.Single(static property => property.Name == "function").ShouldSerialize =
+                                static (tool, _) => !ConversationOptions.IsWebTool(((ChatTool)tool).Type);
+                    },
+                },
+            },
         };
 
         options.Converters.Add(new OneOrManyStringsConverter());
@@ -36,6 +50,8 @@ internal static class DeepSeekJson
         options.Converters.Add(new ResponseInputItemJsonConverter());
         options.Converters.Add(new ResponseToolJsonConverter());
         options.Converters.Add(new ResponseInputJsonConverter());
+        options.Converters.Add(new AnthropicMessageJsonConverter());
+        options.Converters.Add(new AnthropicToolJsonConverter());
         return options;
     }
 }
@@ -247,6 +263,7 @@ internal sealed class ResponseContentPartJsonConverter : JsonConverter<ResponseC
         {
             "input_text" => JsonSerializer.Deserialize<ResponseInputTextContent>(raw, options),
             "input_image" => JsonSerializer.Deserialize<ResponseInputImageContent>(raw, options),
+            "input_file" => JsonSerializer.Deserialize<ResponseInputFileContent>(raw, options),
             "output_text" => JsonSerializer.Deserialize<ResponseOutputTextContent>(raw, options),
             "reasoning_text" => JsonSerializer.Deserialize<ResponseReasoningTextContent>(raw, options),
             _ => JsonSerializer.Deserialize<ResponseContentPart>(raw, Without<ResponseContentPartJsonConverter>(options)),
@@ -573,5 +590,55 @@ internal sealed class ChatReasoningEffortJsonConverter : JsonConverter<DeepSeek.
             DeepSeek.Chat.ChatReasoningEffort.None => "none",
             _ => "high",
         });
+    }
+}
+
+internal sealed class AnthropicMessageJsonConverter : JsonConverter<AnthropicMessage>
+{
+    public override AnthropicMessage? Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options)
+    {
+        var json = JsonNode.Parse(ref reader)?.AsObject() ?? throw new JsonException("Expected a message object.");
+        var reminder = json["role"]?.GetValue<string>() == "latest_reminder" ? json["content"]?.GetValue<string>() : null;
+        if (json["content"] is JsonValue content && content.TryGetValue<string>(out var text))
+        {
+            json["content"] = reminder is null
+                ? new JsonArray(new JsonObject { ["type"] = "text", ["text"] = text }) : new JsonArray();
+        }
+        var message = json.Deserialize<AnthropicMessage>(ResponseJsonConverterHelpers.Without<AnthropicMessageJsonConverter>(options));
+        if (message is not null) message.Reminder = reminder;
+        return message;
+    }
+
+    public override void Write(Utf8JsonWriter writer, AnthropicMessage value, JsonSerializerOptions options)
+    {
+        var plain = ResponseJsonConverterHelpers.Without<AnthropicMessageJsonConverter>(options);
+        if (value.Role != "latest_reminder")
+        {
+            JsonSerializer.Serialize(writer, value, plain);
+            return;
+        }
+        var json = JsonSerializer.SerializeToNode(value, plain)!.AsObject();
+        json["content"] = value.Reminder;
+        json.WriteTo(writer, options);
+    }
+}
+
+internal sealed class AnthropicToolJsonConverter : JsonConverter<AnthropicTool>
+{
+    public override AnthropicTool? Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options)
+        => JsonSerializer.Deserialize<AnthropicTool>(ref reader, ResponseJsonConverterHelpers.Without<AnthropicToolJsonConverter>(options));
+
+    public override void Write(Utf8JsonWriter writer, AnthropicTool value, JsonSerializerOptions options)
+    {
+        var plain = ResponseJsonConverterHelpers.Without<AnthropicToolJsonConverter>(options);
+        if (!ConversationOptions.IsWebTool(value.Type))
+        {
+            JsonSerializer.Serialize(writer, value, plain);
+            return;
+        }
+        var json = JsonSerializer.SerializeToNode(value, plain)!.AsObject();
+        json.Remove("input_schema");
+        if (string.IsNullOrWhiteSpace(value.Name)) json["name"] = value.Type;
+        json.WriteTo(writer, options);
     }
 }

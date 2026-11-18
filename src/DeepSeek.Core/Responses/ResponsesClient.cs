@@ -123,6 +123,23 @@ public class ResponsesClient
             throw new ArgumentException("At least one of Input and Instructions is required.", nameof(request));
         }
 
+        var extended = ConversationOptions.Validate(request.Tools?.Select(static tool => tool.Type), request.SafetyCheck, request.Title, request.ToolChoice);
+        if (extended && (request.Text?.Format?.Type is not (null or "text") || request.TopLogprobs is not null
+            || request.AdditionalProperties?.ContainsKey("previous_response_id") == true
+            || request.AdditionalProperties?.ContainsKey("conversation") == true))
+            throw new ArgumentException("The DeepSeek conversation extensions require text output and stateless input without top_logprobs.", nameof(request));
+        if (request.Input is not null)
+        {
+            foreach (var (type, role) in request.Input.GetItemKinds())
+            {
+                if (role == "latest_reminder")
+                    throw new ArgumentException("Responses does not support latest_reminder messages.", nameof(request));
+                if (extended && type is not ("message" or "reasoning" or "function_call" or "function_call_output" or "web_search_call")
+                    && !(type is null && role is "user" or "assistant" or "system" or "developer"))
+                    throw new ArgumentException("Unsupported input item for the DeepSeek conversation extensions: " + type, nameof(request));
+            }
+        }
+
         request.Model = Model;
         request.Stream = stream;
     }

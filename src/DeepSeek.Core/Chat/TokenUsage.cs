@@ -9,4 +9,5 @@ public sealed class TokenUsage
     public int? PromptCacheMissTokens { get; set; }
     public TokenDetails? PromptTokensDetails { get; set; }
     public TokenDetails? CompletionTokensDetails { get; set; }
+    public IDictionary<string, long>? ServerToolUse { get; set; }
 }

@@ -9,4 +9,5 @@ public sealed class ChatCompletion
     public string? SystemFingerprint { get; set; }
     public IList<ChatChoice> Choices { get; set; } = [];
     public TokenUsage? Usage { get; set; }
+    public Responses.ResponseError? Error { get; set; }
 }

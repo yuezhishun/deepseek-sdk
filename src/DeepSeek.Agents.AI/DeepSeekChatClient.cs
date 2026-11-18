@@ -4,6 +4,7 @@ using System.Text.Json;
 using DeepSeek.Chat;
 using Microsoft.Extensions.AI;
 using AiChatMessage = Microsoft.Extensions.AI.ChatMessage;
+using WireChatMessage = DeepSeek.Chat.ChatMessage;
 
 namespace DeepSeek.Agents.AI;
 
@@ -43,10 +44,14 @@ public sealed class DeepSeekChatClient : IChatClient
         {
             CancellationToken = cancellationToken,
         }).ConfigureAwait(false);
+        if (response.Value.Error is { } error)
+            DeepSeekChatRequestMapper.ThrowGenerationError("Chat Completions", response.Value, error);
+
         var result = DeepSeekChatRequestMapper.MapToChatResponse(response.Value);
         var choice = response.Value.Choices.FirstOrDefault();
-        DeepSeekChatRequestMapper.ValidateJsonResponse(result.Text, merged, response.Value,
-            choice?.FinishReason is "stop" or "tool_calls", choice?.Message?.ToolCalls?.Count > 0);
+        if (choice?.FinishReason != "content_filter" && choice?.Message?.Refusal is null)
+            DeepSeekChatRequestMapper.ValidateJsonResponse(result.Text, merged, response.Value,
+                choice?.FinishReason is "stop" or "tool_calls", choice?.Message?.ToolCalls?.Count > 0);
         return result;
     }
 
@@ -74,6 +79,9 @@ public sealed class DeepSeekChatClient : IChatClient
                 request,
                 new System.ClientModel.Primitives.RequestOptions { CancellationToken = cancellationToken }).ConfigureAwait(false))
             {
+                if (chunk.Error is { } error)
+                    DeepSeekChatRequestMapper.ThrowGenerationError("Chat Completions", chunk, error);
+
                 lastChunk = chunk;
                 messageId ??= chunk.Id ?? Guid.NewGuid().ToString("N");
                 var choice = chunk.Choices.Count > 0 ? chunk.Choices[0] : null;
@@ -98,6 +106,21 @@ public sealed class DeepSeekChatClient : IChatClient
                     };
                 }
 
+                turnState.ApplyMetadata(delta);
+                if (choice?.ServerToolEvent is { } toolEvent)
+                {
+                    if (toolEvent.ValueKind == JsonValueKind.Object && toolEvent.TryGetProperty("type", out var type)
+                        && type.ValueKind == JsonValueKind.String && type.GetString() == "step_reasoning_done")
+                        turnState.CompleteServerToolReasoningStep();
+
+                    yield return new ChatResponseUpdate(ChatRole.Assistant, (string?)null)
+                    {
+                        RawRepresentation = chunk,
+                        MessageId = messageId,
+                        AdditionalProperties = new AdditionalPropertiesDictionary { ["server_tool_event"] = toolEvent },
+                    };
+                }
+
                 if (delta?.ToolCalls is { } deltaToolCalls)
                 {
                     turnState.ApplyToolCalls(deltaToolCalls);
@@ -118,26 +141,41 @@ public sealed class DeepSeekChatClient : IChatClient
             }
 
             cancellationToken.ThrowIfCancellationRequested();
+            if (finishReason is null && (request.SafetyCheck?.Level == "high" || request.Title?.Enabled == true
+                || request.Tools?.Any(static tool => tool.Type is DeepSeekChatOptionKeys.WebSearch or DeepSeekChatOptionKeys.ReadUrl) == true))
+                throw new InvalidDataException("The Chat Completions stream ended before its final status.");
+            var refused = finishReason == "content_filter" || turnState.Native.Refusal is not null;
             var hasToolCalls = turnState.TryBuildToolCalls(out var toolCalls);
-            DeepSeekChatRequestMapper.ValidateJsonResponse(turnState.Content, merged, lastChunk,
-                finishReason is "stop" or "tool_calls", hasToolCalls);
+            if (!refused)
+                DeepSeekChatRequestMapper.ValidateJsonResponse(turnState.Content, merged, lastChunk,
+                    finishReason is "stop" or "tool_calls", hasToolCalls);
 
-            if (usage is not null)
+            if (messageId is not null && (finishReason is not null || usage is not null || turnState.Native.ServerToolCalls is not null))
             {
-                yield return new ChatResponseUpdate(ChatRole.Assistant, [new UsageContent(DeepSeekChatRequestMapper.MapUsage(usage))])
+                turnState.CompleteNativeMessage(refused, hasToolCalls ? toolCalls : []);
+                var properties = new AdditionalPropertiesDictionary();
+                if (finishReason is not null) properties["finish_reason"] = finishReason;
+                DeepSeekChatRequestMapper.AddCompletionProperties(properties, turnState.Native.Title, refused, turnState.Native.Refusal);
+                if (turnState.Native.Annotations is not null) properties["annotations"] = turnState.Native.Annotations;
+                var update = new ChatResponseUpdate(ChatRole.Assistant, (string?)null)
                 {
-                    RawRepresentation = lastChunk,
-                    MessageId = messageId,
-                    AdditionalProperties = new AdditionalPropertiesDictionary
-                    {
-                        ["usage_total_tokens"] = usage.TotalTokens,
-                        ["usage_prompt_tokens"] = usage.PromptTokens,
-                        ["usage_completion_tokens"] = usage.CompletionTokens,
-                    },
+                    RawRepresentation = turnState.Native,
+                    ResponseId = lastChunk?.Id,
+                    AdditionalProperties = properties,
                 };
+                if (usage is not null)
+                {
+                    update.Contents.Add(new UsageContent(DeepSeekChatRequestMapper.MapUsage(usage)));
+                    properties["usage_total_tokens"] = usage.TotalTokens;
+                    properties["usage_prompt_tokens"] = usage.PromptTokens;
+                    properties["usage_completion_tokens"] = usage.CompletionTokens;
+                }
+                if (turnState.Native.ServerToolCalls is not null)
+                    update.Contents.Add(new AIContent { RawRepresentation = turnState.Native });
+                yield return update;
             }
 
-            if (messageId is null || !hasToolCalls)
+            if (messageId is null || !hasToolCalls || refused)
             {
                 yield break;
             }
@@ -334,6 +372,35 @@ public sealed class DeepSeekChatClient : IChatClient
         private readonly StringBuilder _reasoning = new();
 
         public string Content => _content.ToString();
+        public WireChatMessage Native { get; } = new() { Role = "assistant" };
+
+        public void ApplyMetadata(WireChatMessage? delta)
+        {
+            if (delta is null) return;
+            Native.Title = delta.Title ?? Native.Title;
+            Native.Refusal = delta.Refusal ?? Native.Refusal;
+            Native.Annotations = delta.Annotations ?? Native.Annotations;
+            Native.ServerToolCalls = delta.ServerToolCalls ?? Native.ServerToolCalls;
+            if (delta.AdditionalProperties is not null)
+            {
+                Native.AdditionalProperties ??= new Dictionary<string, JsonElement>();
+                foreach (var pair in delta.AdditionalProperties) Native.AdditionalProperties[pair.Key] = pair.Value;
+            }
+        }
+
+        public void CompleteServerToolReasoningStep() => _reasoning.Clear();
+
+        public void CompleteNativeMessage(bool refused, IReadOnlyList<FunctionCallContent> calls)
+        {
+            Native.Content = refused ? string.Empty : Content;
+            Native.ReasoningContent = refused || _reasoning.Length == 0 ? null : _reasoning.ToString();
+            if (refused || calls.Count == 0) return;
+            Native.ToolCalls = _toolCallStates.OrderBy(static pair => pair.Key).Select(static pair => new ToolCall
+            {
+                Id = pair.Value.Id,
+                Function = new ToolCallFunction { Name = pair.Value.Name, Arguments = pair.Value.Arguments.ToString() },
+            }).ToList();
+        }
 
         public void AppendContent(string content) => _content.Append(content);
         public void AppendReasoning(string reasoning) => _reasoning.Append(reasoning);
@@ -391,6 +458,7 @@ public sealed class DeepSeekChatClient : IChatClient
         public AiChatMessage CreateAssistantToolCallMessage(IReadOnlyList<FunctionCallContent> toolCalls)
         {
             var assistant = new AiChatMessage(ChatRole.Assistant, _content.ToString());
+            if (Native.ServerToolCalls is not null) assistant.RawRepresentation = Native;
             if (_reasoning.Length > 0)
             {
                 assistant.AdditionalProperties = new AdditionalPropertiesDictionary

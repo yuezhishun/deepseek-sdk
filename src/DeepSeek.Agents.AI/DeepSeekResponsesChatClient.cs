@@ -40,9 +40,13 @@ public sealed class DeepSeekResponsesChatClient : IChatClient
         {
             CancellationToken = cancellationToken,
         }).ConfigureAwait(false);
+        if (response.Value.Status == "failed" || response.Value.Error is not null)
+            DeepSeekChatRequestMapper.ThrowGenerationError("Responses", response.Value, response.Value.Error);
+
         var result = DeepSeekResponsesRequestMapper.MapResponse(response.Value);
-        DeepSeekChatRequestMapper.ValidateJsonResponse(result.Text, merged, response.Value,
-            response.Value.Status == "completed", response.Value.Output.Any(static item => item.Type is "function_call" or "custom_tool_call"));
+        if (!DeepSeekResponsesRequestMapper.IsRefused(response.Value))
+            DeepSeekChatRequestMapper.ValidateJsonResponse(result.Text, merged, response.Value,
+                response.Value.Status == "completed", response.Value.Output.Any(static item => item.Type is "function_call" or "custom_tool_call"));
         return result;
     }
 
@@ -132,25 +136,39 @@ public sealed class DeepSeekResponsesChatClient : IChatClient
                     yield return DeepSeekResponsesRequestMapper.MapFunctionResultUpdate(eventData, item);
                 }
 
+                else if (item is not null && item.Type is not ("message" or "reasoning"))
+                {
+                    yield return DeepSeekResponsesRequestMapper.MapRawEvent(eventData);
+                }
+
                 continue;
             }
 
             if (type is "response.completed" or "response.incomplete" or "response.failed")
             {
                 var response = eventData.Response;
-                DeepSeekChatRequestMapper.ValidateJsonResponse(text.ToString(), merged, response ?? (object)eventData,
-                    type == "response.completed" && response?.Status == "completed",
-                    response?.Output.Any(static item => item.Type is "function_call" or "custom_tool_call") == true);
+                if (type == "response.failed" || response?.Status == "failed" || response?.Error is not null)
+                    DeepSeekChatRequestMapper.ThrowGenerationError("Responses", response ?? (object)eventData, response?.Error);
+                if (!DeepSeekResponsesRequestMapper.IsRefused(response))
+                    DeepSeekChatRequestMapper.ValidateJsonResponse(text.ToString(), merged, response ?? (object)eventData,
+                        type == "response.completed" && response?.Status == "completed",
+                        response?.Output.Any(static item => item.Type is "function_call" or "custom_tool_call") == true);
                 completed = true;
                 yield return DeepSeekResponsesRequestMapper.MapFinalUpdate(eventData);
                 continue;
             }
 
+            if (type == "error")
+                DeepSeekChatRequestMapper.ThrowGenerationError("Responses", eventData, eventData.Error);
             yield return DeepSeekResponsesRequestMapper.MapRawEvent(eventData);
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        if (!completed) DeepSeekChatRequestMapper.ValidateJsonResponse(text.ToString(), merged, null, complete: false, hasToolCalls: false);
+        if (!completed)
+        {
+            DeepSeekChatRequestMapper.ValidateJsonResponse(text.ToString(), merged, null, complete: false, hasToolCalls: false);
+            throw new InvalidDataException("The Responses stream ended before a terminal event.");
+        }
     }
 
     public void Dispose()
