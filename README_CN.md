@@ -1,6 +1,6 @@
 # deepseek-sdk
 
-当前 SDK 版本为 **1.0.8**，安装命令见下方；Microsoft Agent Framework 引用已更新至 **1.28.0**。
+当前 SDK 版本为 **1.1.0**。Microsoft Agent Framework 主包使用 **1.28.0**。
 
 `deepseek-sdk` 是一个适用于 DeepSeek 的 .NET SDK，包含三个主要库：
 
@@ -13,11 +13,13 @@
 
 ## 变更日志
 
-### Unreleased
+### 1.1.0
 
+- 新增 Decisions 的 WorkflowEvals benchmark。[评测说明](benchmark/DeepSeek.Decisions.Benchmarks/README.md)
+- Agent Framework 的 Azure Functions 和 DurableTask 集中版本更新为稳定版 `1.16.0`。
 - 源码已加入独立 OCR、ASR、HTTP 与 WebSocket TTS，以及两套 Files 的文档解析。
 - Chat、Responses 和 Messages 新增 Flash 联网搜索、深度搜索、链接读取、安全审核、标题和跨协议文档引用。Chat 与 Messages 支持 `latest_reminder`。
-- 多轮请保留原始 assistant 消息和签名。收到最终拒答状态时，应丢弃已展示的暂定文本。安装命令仍指向已发布的 1.0.8。[英文 API 覆盖与示例](README.md#api-coverage) · [DeepSeek 发布公告](https://api-docs.deepseek.com/zh-cn/news/news261113/)
+- 多轮请保留原始 assistant 消息和签名。收到最终拒答状态时，应丢弃已展示的暂定文本。安装命令指向 1.1.0。[英文 API 覆盖与示例](README.md#api-coverage) · [DeepSeek 发布公告](https://api-docs.deepseek.com/zh-cn/news/news261113/)
 
 ### 1.0.8
 
@@ -62,9 +64,9 @@
 ## 安装
 
 ```bash
-dotnet add package DeepSeek.Core --version 1.0.8
-dotnet add package DeepSeek.Agents.AI --version 1.0.8
-dotnet add package DeepSeek.Decisions --version 1.0.8
+dotnet add package DeepSeek.Core --version 1.1.0
+dotnet add package DeepSeek.Agents.AI --version 1.1.0
+dotnet add package DeepSeek.Decisions --version 1.1.0
 ```
 
 核心 NuGet 包名为 `DeepSeek.Core`，公共命名空间仍保持为 `DeepSeek` 与 `DeepSeek.*`。

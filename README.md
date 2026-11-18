@@ -1,6 +1,6 @@
 # deepseek-sdk
 
-The current NuGet release is **1.0.8**. The Microsoft AI adapter uses Microsoft Agent Framework **1.28.0**. [Simplified Chinese README](README_CN.md)
+The SDK version is **1.1.0**. The Microsoft AI adapter uses Microsoft Agent Framework **1.28.0**. [Simplified Chinese README](README_CN.md)
 
 Release 1.0.8 passed all 387 tests on the .NET 11 GA SDK (11.0.100) and runtime (11.0.0). All three libraries target `netstandard2.0`.
 
@@ -25,16 +25,16 @@ Release 1.0.8 passed all 387 tests on the .NET 11 GA SDK (11.0.100) and runtime 
 | Models and Balance | `GetModelsClient()` and `GetBalanceClient()` | 1.0.8 |
 | Search and Fetch | `Search[Async]` and `Fetch[Async]` | 1.0.8 |
 | File upload, list, retrieve, and delete | `GetFilesClient()` and `GetAnthropicFilesClient()` | 1.0.8 |
-| Parsed file uploads and references across chat protocols | Files upload purposes and protocol-specific document content | Unreleased |
-| Web, deep, and image search, URL reading, safety, and titles | Chat, Responses, and Messages request options | Unreleased |
-| OCR and speech recognition | `Ocr[Async]` and `TranscribeSpeech[Async]` | Unreleased |
-| HTTP and WebSocket speech synthesis | `SynthesizeSpeech[Async]` and `SynthesizeSpeechStreamingAsync` | Unreleased |
+| Parsed file uploads and references across chat protocols | Files upload purposes and protocol-specific document content | 1.1.0 |
+| Web, deep, and image search, URL reading, safety, and titles | Chat, Responses, and Messages request options | 1.1.0 |
+| OCR and speech recognition | `Ocr[Async]` and `TranscribeSpeech[Async]` | 1.1.0 |
+| HTTP and WebSocket speech synthesis | `SynthesizeSpeech[Async]` and `SynthesizeSpeechStreamingAsync` | 1.1.0 |
 
 Use `deepseek-flash` for the new conversation extensions and file inputs. Standalone tools have no model parameter. Check the model documentation for features specific to other models. [Official API directory](https://api-docs.deepseek.com/zh-cn/api/create-chat-completion/) · [November 13 announcement](https://api-docs.deepseek.com/zh-cn/news/news261113/)
 
-### Use the conversation extensions (Unreleased)
+### Use the conversation extensions
 
-Build from source for this example or see the current NuGet versions under [Installation](#installation). The three native clients support the same opt-in features through their typed requests. [Core API examples](src/DeepSeek.Core/README.md#unreleased) · [Microsoft AI options and multi-turn example](src/DeepSeek.Agents.AI/README.md#application-extensions-unreleased)
+Install DeepSeek.Agents.AI 1.1.0 to run this example. The three native clients expose the same opt-in features through their typed requests. [Core API examples](src/DeepSeek.Core/README.md#110) · [Microsoft AI options and multi-turn example](src/DeepSeek.Agents.AI/README.md#application-extensions)
 
 ```csharp
 using DeepSeek;
@@ -56,12 +56,14 @@ Console.WriteLine(answer.Text);
 
 ## Changelog
 
-### Unreleased
+### 1.1.0
 
 - Added OCR, ASR, and HTTP and WebSocket TTS.
 - Added parsed file uploads, cross-protocol document references, and inline plain-text documents in Messages.
 - Added opt-in hosted search, URL reading, safety checks, and titles across three chat protocols. Chat and Messages also support `latest_reminder`.
 - Preserved signed tool history, citations, refusals, in-band generation errors, and final usage.
+- Added WorkflowEvals benchmarks for Decisions to the source repository. [Benchmark guide](benchmark/DeepSeek.Decisions.Benchmarks/README.md)
+- Updated the central Agent Framework Azure Functions and DurableTask pins to stable `1.16.0`.
 
 ### 1.0.8
 
@@ -104,9 +106,9 @@ Console.WriteLine(answer.Text);
 ## Installation
 
 ```bash
-dotnet add package DeepSeek.Core --version 1.0.8
-dotnet add package DeepSeek.Agents.AI --version 1.0.8
-dotnet add package DeepSeek.Decisions --version 1.0.8
+dotnet add package DeepSeek.Core --version 1.1.0
+dotnet add package DeepSeek.Agents.AI --version 1.1.0
+dotnet add package DeepSeek.Decisions --version 1.1.0
 ```
 
 The core NuGet package is named `DeepSeek.Core`, while the public namespaces remain `DeepSeek` and `DeepSeek.*`.

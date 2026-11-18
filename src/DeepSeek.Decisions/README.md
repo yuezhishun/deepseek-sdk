@@ -8,10 +8,10 @@ Release 1.0.8 passed all 59 Decisions unit tests on .NET 11 GA (SDK 11.0.100 and
 
 ## Installation
 
-Version 1.0.8 depends on DeepSeek.Core 1.0.8 and was published from tag `v1.0.8`. The source project also supports direct project references.
+Version 1.1.0 depends on DeepSeek.Core 1.1.0. The source project supports direct project references and includes a WorkflowEvals benchmark. [Benchmark guide](https://github.com/yuezhishun/deepseek-sdk/tree/v1.1.0/benchmark/DeepSeek.Decisions.Benchmarks)
 
 ```bash
-dotnet add package DeepSeek.Decisions --version 1.0.8
+dotnet add package DeepSeek.Decisions --version 1.1.0
 ```
 
 ```csharp
