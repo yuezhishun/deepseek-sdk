@@ -10,6 +10,7 @@ using Microsoft.Extensions.AI;
 using DeepSeek.Agents.AI;
 using TestSupport;
 using Xunit;
+using Xunit.Abstractions;
 using AnthropicMessageModel = DeepSeek.Anthropic.AnthropicMessage;
 using DeepSeekChatMessage = DeepSeek.Chat.ChatMessage;
 
@@ -20,10 +21,12 @@ namespace DeepSeek.IntegrationTests;
 public class ChatIntegrationTests : IClassFixture<DeepSeekIntegrationFixture>
 {
     private readonly DeepSeekIntegrationFixture _fixture;
+    private readonly ITestOutputHelper _output;
 
-    public ChatIntegrationTests(DeepSeekIntegrationFixture fixture)
+    public ChatIntegrationTests(DeepSeekIntegrationFixture fixture, ITestOutputHelper output)
     {
         _fixture = fixture;
+        _output = output;
     }
 
     [LiveFact]
@@ -396,33 +399,60 @@ public class ChatIntegrationTests : IClassFixture<DeepSeekIntegrationFixture>
     [LiveFact]
     public async Task Anthropic_Messages_ThinkingAndToolHistory_Live()
     {
+        const string expectedWeather = "Weather: sunny.";
+        const string instructions = "Use lookup_weather to look up the requested city. Once you have a tool result, copy its text exactly and stop.";
+        AnthropicTool[] tools =
+        [
+            new()
+            {
+                Name = "lookup_weather",
+                Description = "Returns the current weather for a city.",
+                InputSchema = JsonNode.Parse("""
+                    {"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}
+                    """)!,
+            },
+        ];
+        var question = new AnthropicMessageModel
+        {
+            Role = "user",
+            Content = [new AnthropicContentBlock { Type = "text", Text = "Call lookup_weather for Hangzhou." }],
+        };
+        var thinking = new AnthropicThinkingConfig { Type = "enabled" };
+        var effort = new AnthropicOutputConfig { Effort = "low" };
+        var first = await _fixture.AnthropicClient.CreateMessageAsync(new AnthropicMessageRequest
+        {
+            MaxTokens = 2048,
+            System = instructions,
+            Thinking = thinking,
+            OutputConfig = effort,
+            Tools = tools,
+            Messages = [question],
+        }, CreateRequestOptions());
+        using var firstRaw = first.GetRawResponse();
+        _output.WriteLine("Anthropic tool request HTTP {0}, id={1}, stop={2}, error={3}, blocks={4}, output tokens={5}",
+            firstRaw.Status, first.Value.Id, first.Value.StopReason, first.Value.Error?.Code,
+            string.Join(", ", first.Value.Content.Select(block => block.Type)), first.Value.Usage?.OutputTokens);
+        Assert.Null(first.Value.Error);
+        Assert.Equal("tool_use", first.Value.StopReason);
+        Assert.Contains(first.Value.Content, block => block.Type == "thinking" && !string.IsNullOrWhiteSpace(block.Thinking));
+        var call = Assert.Single(first.Value.Content, block => block.Type == "tool_use");
+        Assert.Equal("lookup_weather", call.Name);
+        Assert.False(string.IsNullOrWhiteSpace(call.Id));
+        Assert.Equal("Hangzhou", call.Input?["city"]?.GetValue<string>());
+
         var response = await _fixture.AnthropicClient.CreateMessageAsync(
             new AnthropicMessageRequest
             {
-                MaxTokens = 1024,
-                Temperature = 0,
+                MaxTokens = 2048,
+                System = instructions,
+                Thinking = thinking,
+                OutputConfig = effort,
+                Tools = tools,
+                ToolChoice = new AnthropicToolChoice { Type = "none" },
                 Messages =
                 [
-                    new AnthropicMessageModel
-                    {
-                        Role = "user",
-                        Content = [new AnthropicContentBlock { Type = "text", Text = "Use the tool result and answer exactly with Weather: sunny." }],
-                    },
-                    new AnthropicMessageModel
-                    {
-                        Role = "assistant",
-                        Content =
-                        [
-                            new AnthropicContentBlock { Type = "thinking", Thinking = "Need a tool result first." },
-                            new AnthropicContentBlock
-                            {
-                                Type = "tool_use",
-                                Id = "tool_1",
-                                Name = "lookup_weather",
-                                Input = JsonNode.Parse("{\"city\":\"Hangzhou\"}"),
-                            },
-                        ],
-                    },
+                    question,
+                    new AnthropicMessageModel { Role = "assistant", Content = first.Value.Content },
                     new AnthropicMessageModel
                     {
                         Role = "user",
@@ -431,8 +461,8 @@ public class ChatIntegrationTests : IClassFixture<DeepSeekIntegrationFixture>
                             new AnthropicContentBlock
                             {
                                 Type = "tool_result",
-                                ToolUseId = "tool_1",
-                                Content = JsonValue.Create("Weather: sunny."),
+                                ToolUseId = call.Id,
+                                Content = JsonValue.Create(expectedWeather),
                             },
                         ],
                     },
@@ -440,9 +470,20 @@ public class ChatIntegrationTests : IClassFixture<DeepSeekIntegrationFixture>
             },
             CreateRequestOptions());
 
-        Assert.False(string.IsNullOrWhiteSpace(response.Value.StopReason));
+        using var raw = response.GetRawResponse();
+        _output.WriteLine("Anthropic tool result HTTP {0}, id={1}, stop={2}, error={3}, blocks={4}, output tokens={5}",
+            raw.Status, response.Value.Id, response.Value.StopReason, response.Value.Error?.Code,
+            string.Join(", ", response.Value.Content.Select(block => $"{block.Type}(text length={block.Text?.Length})")),
+            response.Value.Usage?.OutputTokens);
+        Assert.Null(response.Value.Error);
+        using var wire = JsonDocument.Parse(raw.Content.ToMemory());
+        Assert.Equal<(string? Type, string? Text)>(wire.RootElement.GetProperty("content").EnumerateArray().Select(block => (
+            block.GetProperty("type").GetString(), block.TryGetProperty("text", out var value) ? value.GetString() : null)),
+            response.Value.Content.Select(block => ((string?)block.Type, block.Text)));
+        Assert.Equal("end_turn", response.Value.StopReason);
         Assert.NotEmpty(response.Value.Content);
-        Assert.Contains(response.Value.Content, block => block.Type == "text" && block.Text?.Contains("Weather: sunny.", StringComparison.Ordinal) == true);
+        Assert.Contains(response.Value.Content, block => block.Type == "text" && block.Text?.Contains(expectedWeather, StringComparison.Ordinal) == true);
+        Assert.Equal(expectedWeather, string.Concat(response.Value.Content.Where(block => block.Type == "text").Select(block => block.Text)).Trim());
     }
 
     private RequestOptions CreateRequestOptions()

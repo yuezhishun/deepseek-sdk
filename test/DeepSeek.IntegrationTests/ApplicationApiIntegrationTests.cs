@@ -9,23 +9,30 @@ using DeepSeek.Responses;
 using DeepSeek.Tools;
 using Microsoft.Extensions.AI;
 using Xunit;
+using Xunit.Abstractions;
 using WireChatMessage = DeepSeek.Chat.ChatMessage;
 
 namespace DeepSeek.IntegrationTests;
 
-public sealed class ApplicationApiIntegrationTests(DeepSeekIntegrationFixture fixture) : IClassFixture<DeepSeekIntegrationFixture>
+public sealed class ApplicationApiIntegrationTests(DeepSeekIntegrationFixture fixture, ITestOutputHelper output) : IClassFixture<DeepSeekIntegrationFixture>
 {
     [LiveFact]
     public async Task ApplicationTools_OcrReturnsOriginalPage()
     {
-        using var document = CreatePdf("Copper Lantern 417");
+        // The PDF embeds a scan so recognition does not depend on server-side font substitution.
+        using var document = File.OpenRead(Path.Combine(AppContext.BaseDirectory, "Fixtures", "ocr-inventory.pdf"));
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(120));
         var result = await fixture.Client.OcrAsync(document, "ocr-check.pdf", "text_recognition",
             new RequestOptions { CancellationToken = timeout.Token });
         using var raw = result.GetRawResponse();
+        output.WriteLine("OCR HTTP {0}, id={1}, pages={2}, error={3}, output tokens={4}",
+            raw.Status, result.Value.Id, result.Value.PageCount, result.Value.Error?.Code, result.Value.Usage?.OutputTokens);
         Assert.Null(result.Value.Error);
         Assert.Equal(1, result.Value.PageCount);
         var page = Assert.Single(result.Value.Pages);
+        output.WriteLine("OCR page {0}, finish={1}, text length={2}", page.Index, page.FinishReason, page.Text?.Length);
+        using var wire = JsonDocument.Parse(raw.Content.ToMemory());
+        Assert.Equal(wire.RootElement.GetProperty("pages")[0].GetProperty("text").GetString(), page.Text);
         Assert.Equal(0, page.Index);
         Assert.Equal("stop", page.FinishReason);
         Assert.Contains("Copper Lantern 417", page.Text, StringComparison.OrdinalIgnoreCase);

@@ -124,6 +124,25 @@ public sealed class DeepSeekApplicationToolsTests
     }
 
     [Fact]
+    public async Task Ocr_SuccessfulEmptyPageIsReturnedWithoutChangingTheOriginalText()
+    {
+        using var handler = new ToolHandler("/v1/tools/ocr", "\n\n" + """
+            {"page_count":1,"pages":[{"index":0,"text":"","finish_reason":"stop"}]}
+            """);
+        using var input = new MemoryStream("document"u8.ToArray());
+        var result = await CreateClient(handler).OcrAsync(input, "report.pdf", "text_recognition");
+        using var raw = result.GetRawResponse();
+
+        Assert.Equal(200, raw.Status);
+        Assert.Null(result.Value.Error);
+        Assert.Equal(1, result.Value.PageCount);
+        var page = Assert.Single(result.Value.Pages);
+        Assert.Equal(0, page.Index);
+        Assert.Equal("stop", page.FinishReason);
+        Assert.Equal(string.Empty, page.Text);
+    }
+
+    [Fact]
     public void Ocr_Http200ErrorRetainsFailureDetails()
     {
         using var handler = new ToolHandler("/v1/tools/ocr", """{"error":{"message":"OCR timed out","code":"gateway_timeout_error"}}""");
