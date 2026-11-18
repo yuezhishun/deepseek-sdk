@@ -17,7 +17,7 @@ Use the solution file from the repository root:
 ## Release Publishing
 
 - `main` 是开发主线。功能和修复通过短分支及 PR 合并，PR 运行无需凭据的离线 CI。只有需要隔离发布范围或维护旧版本时才创建 `release/<version>`。发布完成后将相关改动合回 `main`。
-- GitHub 源码发布使用 `source/vMAJOR.MINOR.PATCH` 标签。发布说明注明 Source Release。保留既有 `deepseek-full-suite-api` 源码快照。
+- GitHub 源码发布使用 `source/vMAJOR.MINOR.PATCH` 标签。发布说明注明 Source Release。
 - NuGet 正式发布使用带注释的 `vMAJOR.MINOR.PATCH` 标签。通过 GitHub 手动运行发布工作流，在目标提交上完成默认框架、.NET 11 在线回归和打包验证。标签推送后才执行 NuGet 上传。
 - 发布前对齐 Core、Agents、Decisions 的包版本、程序集和文件版本、集中版本、包间依赖和 README 安装命令。CI 核对三个打包结果及其中的程序集与 README。
 - 新增兼容 API 升次版本，兼容修复升补丁版本，破坏兼容的公开 API 变更升主版本。已发布的标签保持固定。上传中断时重跑同一提交，内容有变更时使用新版本。
