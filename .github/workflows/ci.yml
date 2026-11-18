@@ -1,0 +1,43 @@
+name: Pull Request CI
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  offline:
+    name: Offline regression
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6.1.0
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+            11.0.100
+
+      - name: Build
+        run: dotnet build DeepSeek.slnx --configuration Release
+
+      - name: Test without service credentials
+        run: >-
+          dotnet test DeepSeek.slnx --configuration Release --no-build
+          --filter 'FullyQualifiedName!~DeepSeek.IntegrationTests|FullyQualifiedName~SpeechWebSocketTests'
+          --logger trx --results-directory artifacts/test-results/pr
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: pr-test-results
+          path: artifacts/test-results/pr

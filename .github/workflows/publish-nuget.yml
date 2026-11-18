@@ -31,6 +31,39 @@ jobs:
             10.0.x
             11.0.100
 
+      - name: Validate release version
+        shell: pwsh
+        run: |
+          $projects = @("DeepSeek.Core", "DeepSeek.Agents.AI", "DeepSeek.Decisions")
+          $centralVersions = ([xml](Get-Content -Raw Directory.Packages.props)).Project.ItemGroup.PackageVersion
+          $version = ([xml](Get-Content -Raw src/DeepSeek.Core/DeepSeek.Core.csproj)).Project.PropertyGroup.Version
+          if ($version -cnotmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') {
+            throw "Package version '$version' must use MAJOR.MINOR.PATCH."
+          }
+
+          if ($env:GITHUB_EVENT_NAME -eq 'push' -and $env:GITHUB_REF -cne "refs/tags/v$version") {
+            throw "The release tag must be v$version to match the package projects. Received '$env:GITHUB_REF'."
+          }
+          $assemblyVersion = "$version.0"
+
+          foreach ($id in $projects) {
+            $project = ([xml](Get-Content -Raw "src/$id/$id.csproj")).Project.PropertyGroup
+            $centralVersion = ($centralVersions | Where-Object Include -CEQ $id).Version
+            if ($project.Version -cne $version -or $project.AssemblyVersion -cne $assemblyVersion -or
+              $project.FileVersion -cne $assemblyVersion -or $centralVersion -cne $version) {
+              throw "$id must use package version $version and assembly and file version $assemblyVersion."
+            }
+            $install = "dotnet add package $id --version $version"
+            foreach ($readme in @("README.md", "README_CN.md", "src/$id/README.md")) {
+              if ((Get-Content $readme) -cnotcontains $install) {
+                throw "$readme must include the install command for $id $version."
+              }
+            }
+          }
+
+          "PACKAGE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Verified release version $version."
+
       - name: Restore
         run: dotnet restore DeepSeek.slnx
 
@@ -43,7 +76,7 @@ jobs:
             echo "::error::Repository secret DEEPSEEK_API_KEY must contain a valid online-test credential."
             exit 1
           fi
-          dotnet test DeepSeek.slnx --configuration "$CONFIGURATION" --no-restore
+          dotnet test DeepSeek.slnx --configuration "$CONFIGURATION" --no-restore --logger trx --results-directory artifacts/test-results/default
 
       - name: Test .NET 11 GA
         env:
@@ -55,71 +88,69 @@ jobs:
           --artifacts-path artifacts/net11
           --logger trx --results-directory artifacts/test-results/net11
 
-      - name: Resolve package version
-        shell: pwsh
-        run: |
-          $ref = "${{ github.ref }}"
-          $refName = "${{ github.ref_name }}"
-
-          if ("${{ github.event_name }}" -eq "push" -and $ref.StartsWith("refs/tags/v")) {
-            $version = $refName.Substring(1)
-          }
-          elseif ("${{ github.event_name }}" -eq "workflow_dispatch") {
-            $projects = @("DeepSeek.Core", "DeepSeek.Agents.AI", "DeepSeek.Decisions")
-            $versions = @($projects | ForEach-Object {
-              ([xml](Get-Content -Raw "src/$_/$_.csproj")).Project.PropertyGroup.Version
-            } | Select-Object -Unique)
-            if ($versions.Count -ne 1) {
-              throw "Manual verification requires all package projects to have the same version."
-            }
-            $version = $versions[0]
-            Write-Host "Manual verification runs tests and packaging; NuGet publishing requires a v* tag push."
-          }
-          else {
-            throw "NuGet publish requires a version tag push. Current ref: '$ref'."
-          }
-          if ([string]::IsNullOrWhiteSpace($version)) {
-            throw "Unable to resolve package version from ref '$ref' (ref_name: '$refName')."
-          }
-          Write-Host "Resolved package version: $version"
-          "PACKAGE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
       - name: Pack DeepSeek.Core
-        run: dotnet pack src/DeepSeek.Core/DeepSeek.Core.csproj --configuration "$CONFIGURATION" --no-restore --output "$PACKAGE_OUTPUT" -p:ContinuousIntegrationBuild=true -p:Version=${{ env.PACKAGE_VERSION }}
+        run: dotnet pack src/DeepSeek.Core/DeepSeek.Core.csproj --configuration "$CONFIGURATION" --no-restore --output "$PACKAGE_OUTPUT" -p:ContinuousIntegrationBuild=true
 
       - name: Pack DeepSeek.Agents.AI
-        run: dotnet pack src/DeepSeek.Agents.AI/DeepSeek.Agents.AI.csproj --configuration "$CONFIGURATION" --no-restore --output "$PACKAGE_OUTPUT" -p:ContinuousIntegrationBuild=true -p:Version=${{ env.PACKAGE_VERSION }}
+        run: dotnet pack src/DeepSeek.Agents.AI/DeepSeek.Agents.AI.csproj --configuration "$CONFIGURATION" --no-restore --output "$PACKAGE_OUTPUT" -p:ContinuousIntegrationBuild=true
 
       - name: Pack DeepSeek.Decisions
-        run: dotnet pack src/DeepSeek.Decisions/DeepSeek.Decisions.csproj --configuration "$CONFIGURATION" --no-restore --output "$PACKAGE_OUTPUT" -p:ContinuousIntegrationBuild=true -p:Version=${{ env.PACKAGE_VERSION }}
+        run: dotnet pack src/DeepSeek.Decisions/DeepSeek.Decisions.csproj --configuration "$CONFIGURATION" --no-restore --output "$PACKAGE_OUTPUT" -p:ContinuousIntegrationBuild=true
 
       - name: List packages
         shell: pwsh
         run: Get-ChildItem $env:PACKAGE_OUTPUT | Select-Object Name,Length
 
-      - name: Validate package files
+      - name: Validate packaged metadata
         shell: pwsh
         run: |
-          $corePackage = Join-Path $env:PACKAGE_OUTPUT "DeepSeek.Core.$env:PACKAGE_VERSION.nupkg"
-          $agentsPackage = Join-Path $env:PACKAGE_OUTPUT "DeepSeek.Agents.AI.$env:PACKAGE_VERSION.nupkg"
-          $decisionsPackage = Join-Path $env:PACKAGE_OUTPUT "DeepSeek.Decisions.$env:PACKAGE_VERSION.nupkg"
+          $version = $env:PACKAGE_VERSION
+          foreach ($id in @("DeepSeek.Core", "DeepSeek.Agents.AI", "DeepSeek.Decisions")) {
+            $path = Join-Path $env:PACKAGE_OUTPUT "$id.$version.nupkg"
+            $archive = [IO.Compression.ZipFile]::OpenRead($path)
+            $assembly = New-TemporaryFile
+            try {
+              $manifestReader = [IO.StreamReader]::new($archive.GetEntry("$id.nuspec").Open())
+              try { $metadata = ([xml]$manifestReader.ReadToEnd()).package.metadata }
+              finally { $manifestReader.Dispose() }
+              if ($metadata.id -cne $id -or $metadata.version -cne $version -or $metadata.readme -cne 'README.md') {
+                throw "Unexpected package metadata in $path."
+              }
+              if ($id -cne 'DeepSeek.Core') {
+                $core = $metadata.dependencies.group.dependency | Where-Object id -CEQ 'DeepSeek.Core'
+                if ($core.version -cne $version) {
+                  throw "$id must depend on DeepSeek.Core $version."
+                }
+              }
 
-          if (-not (Test-Path $corePackage)) {
-            throw "Package file not found: $corePackage"
+              $readmeReader = [IO.StreamReader]::new($archive.GetEntry('README.md').Open())
+              try { $readme = $readmeReader.ReadToEnd() }
+              finally { $readmeReader.Dispose() }
+              if (($readme -split '\r?\n') -cnotcontains "dotnet add package $id --version $version") {
+                throw "The packaged README for $id must show version $version."
+              }
+
+              [IO.Compression.ZipFileExtensions]::ExtractToFile(
+                $archive.GetEntry("lib/netstandard2.0/$id.dll"), $assembly.FullName, $true)
+              $compiled = [Reflection.AssemblyName]::GetAssemblyName($assembly.FullName)
+              $fileVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo($assembly.FullName).FileVersion
+              if ($compiled.Name -cne $id -or $compiled.Version.ToString() -cne "$version.0" -or
+                $fileVersion -cne "$version.0") {
+                throw "Unexpected assembly or file version in $path."
+              }
+            }
+            finally {
+              $archive.Dispose()
+              Remove-Item -LiteralPath $assembly.FullName
+            }
           }
 
-          if (-not (Test-Path $agentsPackage)) {
-            throw "Package file not found: $agentsPackage"
-          }
-
-          if (-not (Test-Path $decisionsPackage)) {
-            throw "Package file not found: $decisionsPackage"
-          }
-
-          Write-Host "Validated package files:"
-          Write-Host " - $corePackage"
-          Write-Host " - $agentsPackage"
-          Write-Host " - $decisionsPackage"
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: release-test-results
+          path: artifacts/test-results
 
       - name: NuGet login with trusted publishing
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')

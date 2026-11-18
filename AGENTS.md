@@ -15,15 +15,13 @@ Use the solution file from the repository root:
 - 对 `src/` 下 Core、Agents 或 Decisions 的项目运行 `dotnet pack`，会在各项目的 `pack/` 目录创建 NuGet 包。
 
 ## Release Publishing
-NuGet publishing must be triggered only by pushing a `v*` tag such as `v1.0.2`. `release/*` branches are for release preparation and must not be treated as the package version source. Before tagging, confirm the target commit contains the intended SDK, test, and workflow fixes.
 
-Publish checklist and pitfalls:
-
-- 更新 `src/` 下 Core、Agents、Decisions 三个包项目的 `Version`、`AssemblyVersion`、`FileVersion` 和发布说明，使其与目标版本一致，例如 `1.0.3` / `1.0.3.0`。
-- Keep the workflow packaging step aligned with the pushed tag version. The publish workflow resolves `PACKAGE_VERSION` from the `v*` tag and passes it into `dotnet pack`.
-- Do not use a `v*` branch name as the release trigger. A branch like `v1.0.3` will fail publish validation because the workflow requires `refs/tags/v*`.
-- If a branch and tag share the same name, push the tag with an explicit ref such as `git push origin refs/tags/v1.0.3` to avoid refspec ambiguity.
-- If a tag was pushed before the release commit was ready, move the local tag to the corrected commit, delete the remote tag with `git push origin :refs/tags/v1.0.3`, then push the corrected tag again.
+- `main` 是开发主线。功能和修复通过短分支及 PR 合并，PR 运行无需凭据的离线 CI。只有需要隔离发布范围或维护旧版本时才创建 `release/<version>`。发布完成后将相关改动合回 `main`。
+- GitHub 源码发布使用 `source/vMAJOR.MINOR.PATCH` 标签。发布说明注明 Source Release。保留既有 `deepseek-full-suite-api` 源码快照。
+- NuGet 正式发布使用带注释的 `vMAJOR.MINOR.PATCH` 标签。通过 GitHub 手动运行发布工作流，在目标提交上完成默认框架、.NET 11 在线回归和打包验证。标签推送后才执行 NuGet 上传。
+- 发布前对齐 Core、Agents、Decisions 的包版本、程序集和文件版本、集中版本、包间依赖和 README 安装命令。CI 核对三个打包结果及其中的程序集与 README。
+- 新增兼容 API 升次版本，兼容修复升补丁版本，破坏兼容的公开 API 变更升主版本。已发布的标签保持固定。上传中断时重跑同一提交，内容有变更时使用新版本。
+- GitHub Release 使用英文标题。正文提供英文说明并保留中文内容。NuGet 正式发布后核对三个包均可下载，再创建对应的 GitHub Release。
 
 ## Coding Style & Naming Conventions
 Follow the existing C# conventions used across `src/` and `test/`: 4-space indentation, file-scoped namespaces, nullable reference types enabled, and `ImplicitUsings` enabled. Use `PascalCase` for public types and members, `camelCase` for locals and parameters, and keep API-area files grouped with the client they belong to, for example `Chat/ChatClient.cs` and `Chat/ChatModels.cs`. Prefer small, focused request/response model files over large mixed modules.
