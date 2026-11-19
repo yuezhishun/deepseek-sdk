@@ -21,7 +21,7 @@ Use the solution file from the repository root:
 - NuGet 正式发布使用带注释的 `vMAJOR.MINOR.PATCH` 标签。通过 GitHub 手动运行发布工作流，在目标提交上完成默认框架、.NET 11 在线回归和打包验证。标签推送后才执行 NuGet 上传。
 - 发布前对齐 Core、Agents、Decisions 的包版本、程序集和文件版本、集中版本、包间依赖和 README 安装命令。CI 核对三个打包结果及其中的程序集与 README。
 - 新增兼容 API 升次版本，兼容修复升补丁版本，破坏兼容的公开 API 变更升主版本。已发布的标签保持固定。上传中断时重跑同一提交，内容有变更时使用新版本。
-- GitHub Release 使用英文标题。正文提供英文说明并保留中文内容。NuGet 正式发布后核对三个包均可下载，再创建对应的 GitHub Release。
+- GitHub Release 标题只用版本号（如 `v1.1.0`）。正文提供英文说明并保留中文内容。NuGet 正式发布后核对三个包均可下载，再创建对应的 GitHub Release。
 
 ## Coding Style & Naming Conventions
 Follow the existing C# conventions used across `src/` and `test/`: 4-space indentation, file-scoped namespaces, nullable reference types enabled, and `ImplicitUsings` enabled. Use `PascalCase` for public types and members, `camelCase` for locals and parameters, and keep API-area files grouped with the client they belong to, for example `Chat/ChatClient.cs` and `Chat/ChatModels.cs`. Prefer small, focused request/response model files over large mixed modules.
