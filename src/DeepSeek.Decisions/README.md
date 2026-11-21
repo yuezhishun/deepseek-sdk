@@ -156,6 +156,28 @@ var result = await decisions.SystemOneAsync(new SystemOneRequest
 
 Asset references can fill a string or appear inside a sentence. The SDK matches whole values first, then scans from left to right and uses the longest match at each position. Object keys remain literal. Repeated references send the image again. Each question receives shared evidence and its own image references. Every asset must be referenced.
 
+## JSON protocol entry points
+
+`CreateOpenAiDecisionAsync(JsonElement, CancellationToken)` and
+`CreateJevSystemOneAsync(JsonElement, bool enableImages, bool enableLongContext, CancellationToken)`
+accept the two JSON request shapes and return a JSON response. Each request specifies the
+bound DeepSeek model. Invalid requests throw `DecisionProtocolException` with a status, a code,
+and the parameter location. Hosting applications handle HTTP routes, authentication,
+compression, multipart files, and full image decoding.
+
+- OpenAI Decisions covers predicate, choice, score, and per-question refusal. It accepts
+  system, developer, user, and assistant messages and verified function or custom tool call
+  history. Roles and tool history are kept in order as evidence, with no execution of tools.
+  Use of OpenAI cache settings or the safety identifier yields `unsupported_capability`.
+- Jev System One covers noul, choice, score, and box. Enable images explicitly for PNG/JPEG
+  assets and box questions. Box needs a vision model and yields normalized coordinates with
+  model-reported confidence from 0 to 1, or `confidence: null` if unavailable. Set the
+  long-context flag to request a larger local budget. The
+  compatibility layer budgets one token per UTF-8 byte of rendered text and 1024 per image.
+- The response uses actual DeepSeek token counts. A missing required count yields
+  `upstream_usage_missing`. The OpenAI shape reports zero cache writes by this compatibility
+  layer and zero reasoning tokens when thinking is disabled and the model emits no reasoning.
+
 ## Methods, probabilities, and options
 
 ```csharp
@@ -205,7 +227,7 @@ The SDK validates all questions before sending the first request and snapshots i
 
 Usage aggregates all attempts visible to the SDK. Unreported counts remain null and reported zeros stay zero. A failed request can leave aggregate usage unknown. Chat omits cache_write_tokens.
 
-Each request supports 1–400 questions. Decisions Choice accepts 2–255 options, Jev Choice accepts 1–255 options, and Score accepts 2–10 levels. Inputs are user messages with text, JSON evidence, or images. Full conversation roles, tool history, files, audio, Box, multipart, grammar, few-shot options, multi-provider routing, and two-stage reasoning are outside this API.
+The original typed methods support 1–400 questions. Decisions Choice accepts 2–255 options, Jev Choice accepts 1–255 options, and Score accepts 2–10 levels. These methods accept user messages with text, JSON evidence, or images.
 
 ## Build and test
 

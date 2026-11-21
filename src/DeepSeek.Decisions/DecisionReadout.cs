@@ -4,7 +4,7 @@ namespace DeepSeek.Decisions;
 
 internal static class DecisionReadout
 {
-    internal static JsonElement Choice(JsonElement root)
+    internal static JsonElement Choice(JsonElement root, bool allowRefusal, out bool refused)
     {
         if (!root.TryGetProperty("choices", out var choices) || choices.ValueKind != JsonValueKind.Array || choices.GetArrayLength() != 1)
             throw new JsonException("模型必须返回一个 completion choice。");
@@ -13,10 +13,10 @@ internal static class DecisionReadout
         var stop = choice.TryGetProperty("finish_reason", out var finish) && finish.ValueKind == JsonValueKind.String ? finish.GetString() : null;
         if (stop is "length" or "max_tokens" or "max_output_tokens" or "model_context_window_exceeded")
             throw new InvalidOperationException("决策答案被截断；请检查输出预算或上下文长度。");
-        if (stop is "refusal" or "content_filter") throw new InvalidOperationException("模型拒绝回答此决策问题。");
-        if (choice.TryGetProperty("message", out var message) && message.ValueKind == JsonValueKind.Object &&
-            message.TryGetProperty("refusal", out var refusal) && refusal.ValueKind != JsonValueKind.Null)
-            throw new InvalidOperationException("模型拒绝回答此决策问题。");
+        refused = stop is "refusal" or "content_filter" ||
+            choice.TryGetProperty("message", out var message) && message.ValueKind == JsonValueKind.Object &&
+            message.TryGetProperty("refusal", out var refusal) && refusal.ValueKind != JsonValueKind.Null;
+        if (refused && !allowRefusal) throw new InvalidOperationException("模型拒绝回答此决策问题。");
         return choice;
     }
 
@@ -119,6 +119,48 @@ internal static class DecisionReadout
             distribution = DecisionMath.Normalize(distribution);
         }
         return distribution;
+    }
+
+    internal static SystemOneAnswer Box(string text)
+    {
+        using var document = JsonDocument.Parse(text);
+        var root = document.RootElement;
+        if (root.ValueKind != JsonValueKind.Object ||
+            !root.TryGetProperty("box", out var box) ||
+            box.ValueKind != JsonValueKind.Object || box.EnumerateObject().Count() != 4)
+            throw new JsonException("框选答案缺少坐标。");
+
+        var hasConfidence = root.TryGetProperty("confidence", out var reportedConfidence);
+        if (root.EnumerateObject().Count() != (hasConfidence ? 2 : 1))
+            throw new JsonException("框选答案包含意外字段。");
+        double? confidence = null;
+        if (hasConfidence && reportedConfidence.ValueKind != JsonValueKind.Null)
+        {
+            if (reportedConfidence.ValueKind != JsonValueKind.Number || !reportedConfidence.TryGetDouble(out var value) ||
+                !DecisionMath.IsFinite(value) || value is < 0 or > 1)
+                throw new JsonException("框选置信度必须为 null 或 0 到 1 之间的有限数。");
+            confidence = value;
+        }
+
+        double Edge(string name)
+        {
+            if (!box.TryGetProperty(name, out var property) || property.ValueKind != JsonValueKind.Number ||
+                !property.TryGetDouble(out var value) || !DecisionMath.IsFinite(value) || value is < 0 or > 1)
+                throw new JsonException("框选坐标必须是 0 到 1 之间的有限数。");
+            return value;
+        }
+
+        var top = Edge("top");
+        var bottom = Edge("bottom");
+        var left = Edge("left");
+        var right = Edge("right");
+        if (top >= bottom || left >= right) throw new JsonException("框选坐标顺序无效。");
+        return new SystemOneAnswer
+        {
+            Type = "box",
+            Box = JsonSerializer.SerializeToElement(new { top, bottom, left, right }),
+            Confidence = confidence,
+        };
     }
 
     internal static SystemOneAnswer Answer(PreparedQuestion question, double[] distribution)

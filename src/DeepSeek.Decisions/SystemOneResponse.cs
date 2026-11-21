@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace DeepSeek.Decisions;
@@ -36,6 +37,9 @@ public sealed class SystemOneAnswer
 
     [JsonPropertyName("confidence"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public double? Confidence { get; set; }
+
+    [JsonPropertyName("box"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public JsonElement? Box { get; set; }
 
     [JsonPropertyName("legend"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IDictionary<string, object?>? Legend { get; set; }

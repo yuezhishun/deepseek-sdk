@@ -28,7 +28,7 @@ public sealed class DecisionUsage
         ["reasoning_tokens"] = null,
     };
 
-    internal static DecisionUsage Read(JsonElement root)
+    internal static DecisionUsage Read(JsonElement root, bool thinkingDisabled = false)
     {
         var result = new DecisionUsage();
         if (root.TryGetProperty("usage", out var usage) && usage.ValueKind == JsonValueKind.Object)
@@ -39,6 +39,10 @@ public sealed class DecisionUsage
             catch (OverflowException) { result.TotalTokens = null; }
             result.InputTokensDetails["cached_tokens"] = Count(usage, "prompt_cache_hit_tokens") ?? NestedCount(usage, "prompt_tokens_details", "cached_tokens");
             result.OutputTokensDetails["reasoning_tokens"] = NestedCount(usage, "completion_tokens_details", "reasoning_tokens");
+            if (thinkingDisabled && result.OutputTokensDetails["reasoning_tokens"] is null &&
+                root.TryGetProperty("choices", out var choices) && choices.ValueKind == JsonValueKind.Array &&
+                !choices.EnumerateArray().Any(HasReasoning))
+                result.OutputTokensDetails["reasoning_tokens"] = 0;
         }
         return result;
     }
@@ -68,6 +72,12 @@ public sealed class DecisionUsage
             },
         };
     }
+
+    private static bool HasReasoning(JsonElement choice) =>
+        choice.ValueKind == JsonValueKind.Object && choice.TryGetProperty("message", out var message) &&
+        message.ValueKind == JsonValueKind.Object && message.TryGetProperty("reasoning_content", out var reasoning) &&
+        reasoning.ValueKind != JsonValueKind.Null &&
+        (reasoning.ValueKind != JsonValueKind.String || !string.IsNullOrEmpty(reasoning.GetString()));
 
     private static long? NestedCount(JsonElement value, string parent, string name)
         => value.TryGetProperty(parent, out var child) && child.ValueKind == JsonValueKind.Object ? Count(child, name) : null;

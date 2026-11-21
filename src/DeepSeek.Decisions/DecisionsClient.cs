@@ -6,7 +6,7 @@ using DeepSeek.Chat;
 
 namespace DeepSeek.Decisions;
 
-public sealed class DecisionsClient
+public sealed partial class DecisionsClient
 {
     private readonly ChatClient _chat;
     private readonly object _capabilityLock = new();
@@ -31,9 +31,15 @@ public sealed class DecisionsClient
         CheckModel(request.Model);
         var prepared = PreparedQuestion.ForDecisions(request);
         var response = await RunAsync(prepared, decisionOptions, options).ConfigureAwait(false);
+        return MakeDecision(prepared, response);
+    }
+
+    private Decision MakeDecision(PreparedQuestion[] prepared, SystemOneResponse response)
+    {
         var answers = prepared.Select(question =>
         {
             var answer = response.Answers[question.Id];
+            if (answer.Type == "refusal") return new DecisionAnswer { Type = "refusal", Name = question.Name };
             return new DecisionAnswer
             {
                 Type = question.Kind == "noul" ? "predicate" : question.Kind,
@@ -69,7 +75,8 @@ public sealed class DecisionsClient
             throw new ArgumentException("请求模型必须与绑定的 ChatClient.Model 一致；切换模型请创建新的客户端。");
     }
 
-    private async Task<SystemOneResponse> RunAsync(PreparedQuestion[] questions, DecisionOptions? decisionOptions, RequestOptions? options)
+    private async Task<SystemOneResponse> RunAsync(PreparedQuestion[] questions, DecisionOptions? decisionOptions, RequestOptions? options,
+        bool allowRefusal = false)
     {
         var settings = (decisionOptions ?? new DecisionOptions()).Snapshot();
         if (options?.BufferResponse is false) throw new InvalidOperationException("决策调用要求 RequestOptions.BufferResponse 为 true。");
@@ -91,7 +98,8 @@ public sealed class DecisionsClient
                 if (index >= questions.Length) return;
                 try
                 {
-                    answers[index] = await AnswerAsync(questions[index], settings, requestOptions, diagnostics[index], cancellation.Token).ConfigureAwait(false);
+                    answers[index] = await AnswerAsync(questions[index], settings, requestOptions, diagnostics[index], cancellation.Token,
+                        allowRefusal).ConfigureAwait(false);
                 }
                 catch (Exception exception)
                 {
@@ -120,9 +128,10 @@ public sealed class DecisionsClient
         };
     }
 
-    private async Task<SystemOneAnswer> AnswerAsync(PreparedQuestion question, DecisionOptions settings, RequestOptions? options, DecisionDiagnostic diagnostic, CancellationToken cancellationToken)
+    private async Task<SystemOneAnswer> AnswerAsync(PreparedQuestion question, DecisionOptions settings, RequestOptions? options,
+        DecisionDiagnostic diagnostic, CancellationToken cancellationToken, bool allowRefusal)
     {
-        var method = settings.Method;
+        var method = question.Kind == "box" ? "structured" : settings.Method;
         if (method == "auto")
         {
             lock (_capabilityLock) method = question.Keys.Length > 26 || _logprobsUnavailable ? "structured" : "logprobs";
@@ -153,11 +162,13 @@ public sealed class DecisionsClient
                 using var raw = result.GetRawResponse();
                 using var document = JsonDocument.Parse(raw.Content?.ToString() ?? string.Empty);
                 if (document.RootElement.ValueKind != JsonValueKind.Object) throw new JsonException("completion 响应必须是对象。");
-                usage = DecisionUsage.Read(document.RootElement);
+                usage = DecisionUsage.Read(document.RootElement, allowRefusal && settings.Thinking == ThinkingMode.Disabled);
                 usages.Add(usage);
                 recorded = true;
-                var choice = DecisionReadout.Choice(document.RootElement);
+                var choice = DecisionReadout.Choice(document.RootElement, allowRefusal, out var refusal);
+                if (refusal) return new SystemOneAnswer { Type = "refusal" };
                 var text = DecisionReadout.Text(choice);
+                if (question.Kind == "box") return DecisionReadout.Box(text);
                 double[]? distribution;
                 if (method == "logprobs")
                 {

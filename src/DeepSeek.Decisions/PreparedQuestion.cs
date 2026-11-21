@@ -44,11 +44,16 @@ internal sealed class PreparedQuestion
         }
         else throw new ArgumentException("Input 必须是字符串或 user 消息数组；JSON 证据请使用 input_json 内容块。", nameof(request));
 
-        return request.Questions!.Select((question, index) =>
+        return ForDecisions(request, state);
+    }
+
+    internal static PreparedQuestion[] ForDecisions(DecisionRequest request, IReadOnlyList<ChatMessage> state,
+        IList<ChatContentPart>[]? preparedInstructions = null) =>
+        request.Questions.Select((question, index) =>
         {
             if (question is null) throw new ArgumentException($"questions[{index}] 不能为空。", nameof(request));
             var item = new PreparedQuestion { Id = index.ToString(CultureInfo.InvariantCulture), Name = question.Name, Kind = question.Type, State = state };
-            var instructions = Content(Element(question.Instructions), $"questions[{index}].instructions");
+            var instructions = preparedInstructions?[index] ?? Content(Element(question.Instructions), $"questions[{index}].instructions");
             var descriptions = new List<IList<ChatContentPart>>();
             switch (question.Type)
             {
@@ -95,14 +100,23 @@ internal sealed class PreparedQuestion
             item.QuestionParts = item.BuildQuestion(instructions, descriptions);
             return item;
         }).ToArray();
-    }
 
-    internal static PreparedQuestion[] ForSystemOne(SystemOneRequest request)
+    internal static PreparedQuestion[] ForSystemOne(SystemOneRequest request, bool strictProtocol = false,
+        long expandedBytes = 0, bool enableLongContext = false)
     {
         if (request is null) throw new ArgumentNullException(nameof(request));
-        CheckCount(request.Questions?.Count ?? 0, 1, 400, "questions");
+        CheckCount(request.Questions?.Count ?? 0, 1, strictProtocol ? int.MaxValue : 400, "questions");
         var assets = new Dictionary<string, string>(StringComparer.Ordinal);
+        var imageSizes = new Dictionary<string, int>(StringComparer.Ordinal);
         var totalReferenceBytes = 0;
+        if (strictProtocol && expandedBytes > JevDecisionInput.MaxExpandedBytes) throw JevDecisionInput.TooLarge("body");
+
+        void CountImage(string reference)
+        {
+            expandedBytes += Math.Max(0, imageSizes[reference] - Encoding.UTF8.GetByteCount(reference));
+            if (expandedBytes > JevDecisionInput.MaxExpandedBytes) throw JevDecisionInput.TooLarge("assets");
+        }
+        Action<string>? observe = strictProtocol ? CountImage : null;
         foreach (var asset in request.Assets ?? new Dictionary<string, SystemOneAsset>())
         {
             var bytes = Encoding.UTF8.GetByteCount(asset.Key);
@@ -111,19 +125,27 @@ internal sealed class PreparedQuestion
                 throw new ArgumentException("资产引用不能为空；单个引用最多 1024 UTF-8 字节，合计最多 65536 字节。");
             if (asset.Value is null || asset.Value.Type != "image" || asset.Value.Format is not ("png" or "jpg" or "jpeg"))
                 throw new ArgumentException("Jev assets 仅接受 PNG/JPEG 图片。");
-            ValidateBase64(asset.Value.DataBase64);
+            var encoded = asset.Value.DataBase64;
+            if (strictProtocol)
+                imageSizes.Add(asset.Key, (encoded.Length / 4) * 3 -
+                    (encoded.EndsWith("==", StringComparison.Ordinal) ? 2 : encoded.EndsWith("=", StringComparison.Ordinal) ? 1 : 0));
+            else ValidateBase64(encoded);
             assets.Add(asset.Key, "data:image/" + (asset.Value.Format == "png" ? "png" : "jpeg") + ";base64," + asset.Value.DataBase64);
         }
         var used = new HashSet<string>(StringComparer.Ordinal);
         var stateParts = new List<ChatContentPart> { new ChatTextContentPart("Shared evidence (JSON data with inline images):\n") };
-        Render(Element(request.State), stateParts, assets, used);
+        Render(Element(request.State), stateParts, assets, used, observe);
         var state = new[] { Message(stateParts) };
+        var stateContext = strictProtocol ? ContextBudget(stateParts) : 0;
+        var requestContext = stateContext;
+        var perQuestionLimit = enableLongContext ? 262144 : 32768;
+        var perRequestLimit = enableLongContext ? 262144 : 65536;
         var result = request.Questions!.Select(pair =>
         {
             var question = pair.Value ?? throw new ArgumentException($"问题 {pair.Key} 不能为空。");
             var item = new PreparedQuestion { Id = pair.Key, Kind = question.Type, State = state };
             var instructions = new List<ChatContentPart>();
-            if (question.Instructions is not null) Render(Element(question.Instructions), instructions, assets, used);
+            if (question.Instructions is not null) Render(Element(question.Instructions), instructions, assets, used, observe);
             var criteria = Element(question.Criteria);
             var descriptions = new List<IList<ChatContentPart>>();
             switch (question.Type)
@@ -138,7 +160,7 @@ internal sealed class PreparedQuestion
                     foreach (var key in item.Keys)
                     {
                         var parts = new List<ChatContentPart>();
-                        if (criteria.ValueKind == JsonValueKind.Object && criteria.TryGetProperty(key, out var value)) Render(value, parts, assets, used);
+                        if (criteria.ValueKind == JsonValueKind.Object && criteria.TryGetProperty(key, out var value)) Render(value, parts, assets, used, observe);
                         else parts.Add(new ChatTextContentPart(key));
                         descriptions.Add(parts);
                     }
@@ -154,7 +176,7 @@ internal sealed class PreparedQuestion
                     foreach (var choice in choices)
                     {
                         var parts = new List<ChatContentPart>();
-                        Render(choice.Value, parts, assets, used);
+                        Render(choice.Value, parts, assets, used, observe);
                         descriptions.Add(parts);
                     }
                     break;
@@ -169,18 +191,35 @@ internal sealed class PreparedQuestion
                     {
                         item.Legend.Add(item.Keys[level++], value.Clone());
                         var parts = new List<ChatContentPart>();
-                        Render(value, parts, assets, used);
+                        Render(value, parts, assets, used, observe);
                         descriptions.Add(parts);
                     }
+                    break;
+                case "box" when strictProtocol:
+                    if (!stateParts.Concat(instructions).Any(part => part is ChatImageContentPart))
+                        throw DecisionProtocol.Invalid(400, "questions");
+                    instructions.Add(new ChatTextContentPart(
+                        "\nLocate the target in the specified image. Return the top, bottom, left, and right edges as fractions between 0 and 1 from the top-left of that image. Return your confidence in the box from 0 to 1, or null if unavailable."));
                     break;
                 default:
                     throw new ArgumentException($"不支持 Jev 题型 {question.Type}。");
             }
             item.QuestionParts = item.BuildQuestion(instructions, descriptions);
+            if (strictProtocol)
+            {
+                var questionContext = ContextBudget(item.QuestionParts);
+                requestContext += questionContext;
+                if (stateContext + questionContext > perQuestionLimit || requestContext > perRequestLimit)
+                    throw new DecisionProtocolException(400, "max_tokens_exceeded", "请求超过本地兼容层的上下文预算。", "questions");
+            }
             return item;
         }).ToArray();
         var unused = assets.Keys.FirstOrDefault(key => !used.Contains(key));
-        if (unused is not null) throw new ArgumentException($"资产 {unused} 未在 state、instructions 或 criteria 中引用。");
+        if (unused is not null)
+        {
+            if (strictProtocol) throw DecisionProtocol.Invalid(400, "assets");
+            throw new ArgumentException($"资产 {unused} 未在 state、instructions 或 criteria 中引用。");
+        }
         return result;
     }
 
@@ -214,6 +253,15 @@ internal sealed class PreparedQuestion
 
     private string Schema(string method)
     {
+        if (Kind == "box")
+            return """
+                {"type":"object","additionalProperties":false,"required":["box","confidence"],"properties":{
+                  "box":{"type":"object","additionalProperties":false,"required":["top","bottom","left","right"],"properties":{
+                    "top":{"type":"number","minimum":0,"maximum":1},"bottom":{"type":"number","minimum":0,"maximum":1},
+                    "left":{"type":"number","minimum":0,"maximum":1},"right":{"type":"number","minimum":0,"maximum":1}}},
+                  "confidence":{"type":["number","null"],"minimum":0,"maximum":1}}}
+                """;
+
         object schema;
         if (method == "discrete")
             schema = Kind == "noul" ? (object)new { type = "boolean" }
@@ -280,7 +328,7 @@ internal sealed class PreparedQuestion
         return parts;
     }
 
-    private static void ValidateImageUrl(string url)
+    internal static void ValidateImageUrl(string url)
     {
         if (url.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
         {
@@ -303,7 +351,12 @@ internal sealed class PreparedQuestion
         catch (FormatException exception) { throw new ArgumentException("图片 base64 无效。", exception); }
     }
 
-    private static void Render(JsonElement value, IList<ChatContentPart> parts, IReadOnlyDictionary<string, string> assets, ISet<string> used)
+    // UTF-8 bytes bound text tokenization conservatively; DeepSeek caps each image at 1024 input tokens.
+    private static long ContextBudget(IEnumerable<ChatContentPart> parts) =>
+        parts.Sum(part => part is ChatTextContentPart text ? (long)Encoding.UTF8.GetByteCount(text.Text ?? "") : 1024);
+
+    private static void Render(JsonElement value, IList<ChatContentPart> parts, IReadOnlyDictionary<string, string> assets,
+        ISet<string> used, Action<string>? observe = null)
     {
         switch (value.ValueKind)
         {
@@ -311,6 +364,7 @@ internal sealed class PreparedQuestion
                 var text = value.GetString()!;
                 if (assets.TryGetValue(text, out var wholeImage))
                 {
+                    observe?.Invoke(text);
                     parts.Add(new ChatImageContentPart(wholeImage));
                     used.Add(text);
                     return;
@@ -333,6 +387,7 @@ internal sealed class PreparedQuestion
                     var escaped = JsonSerializer.Serialize(text.Substring(offset, position - offset));
                     parts.Add(new ChatTextContentPart(escaped.Substring(1, escaped.Length - 2)));
                     if (match is null) break;
+                    observe?.Invoke(match);
                     parts.Add(new ChatImageContentPart(assets[match]));
                     used.Add(match);
                     offset = position + match.Length;
@@ -346,7 +401,7 @@ internal sealed class PreparedQuestion
                 {
                     parts.Add(new ChatTextContentPart((first ? "" : ",") + JsonSerializer.Serialize(property.Name) + ":"));
                     first = false;
-                    Render(property.Value, parts, assets, used);
+                    Render(property.Value, parts, assets, used, observe);
                 }
                 parts.Add(new ChatTextContentPart("}"));
                 break;
@@ -357,7 +412,7 @@ internal sealed class PreparedQuestion
                 {
                     if (!firstItem) parts.Add(new ChatTextContentPart(","));
                     firstItem = false;
-                    Render(item, parts, assets, used);
+                    Render(item, parts, assets, used, observe);
                 }
                 parts.Add(new ChatTextContentPart("]"));
                 break;
