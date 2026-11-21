@@ -2,16 +2,17 @@
 
 The SDK version is **1.1.0**. The Microsoft AI adapter uses Microsoft Agent Framework **1.28.0**. [Simplified Chinese README](README_CN.md)
 
-Release 1.0.8 passed all 387 tests on the .NET 11 GA SDK (11.0.100) and runtime (11.0.0). All three libraries target `netstandard2.0`.
+Release 1.0.8 passed all 387 tests on the .NET 11 GA SDK (11.0.100) and runtime (11.0.0). Both libraries target `netstandard2.0`.
 
-`deepseek-sdk` is a .NET SDK for DeepSeek with three primary libraries:
+`deepseek-sdk` is a .NET SDK for DeepSeek with two primary libraries:
 
 - `src/DeepSeek.Core`: built on `System.ClientModel` and the HTTP pipeline model, providing a consistent request handling model, better control over cross-cutting concerns such as logging, retries, and diagnostics, and a stronger foundation for extensible typed SDK clients
 - `src/DeepSeek.Agents.AI`: extension and adapter support for Microsoft Agent Framework
-- `src/DeepSeek.Decisions` provides Jev and Decisions APIs for text, JSON, and images, with probability source diagnostics. [Decisions package guide](src/DeepSeek.Decisions/README.md)
 - accepts model identifiers supplied by the caller, so applications can follow current and future DeepSeek model names without a Core package upgrade
 - support for DeepSeek's two Beta APIs: chat prefix continuation and FIM completion
 - implements thinking mode following DeepSeek's official documentation, including reasoning enablement, reasoning effort control, `reasoning_content` handling, and continued reasoning semantics across multi-turn conversations and tool calls
+
+`DeepSeek.Decisions` provides Jev and Decisions APIs. Its development and releases moved to a separate repository. [Decisions SDK](https://github.com/yuezhishun/decisions-sdk)
 
 ## API coverage
 
@@ -62,7 +63,7 @@ Console.WriteLine(answer.Text);
 - Added parsed file uploads, cross-protocol document references, and inline plain-text documents in Messages.
 - Added opt-in hosted search, URL reading, safety checks, and titles across three chat protocols. Chat and Messages also support `latest_reminder`.
 - Preserved signed tool history, citations, refusals, in-band generation errors, and final usage.
-- Added WorkflowEvals benchmarks for Decisions to the source repository. [Benchmark guide](benchmark/DeepSeek.Decisions.Benchmarks/README.md)
+- Added WorkflowEvals benchmarks for Decisions. [Benchmark guide](https://github.com/yuezhishun/decisions-sdk/tree/main/benchmark/DeepSeek.Decisions.Benchmarks)
 - Updated the central Agent Framework Azure Functions and DurableTask pins to stable `1.16.0`.
 
 ### 1.0.8
@@ -108,7 +109,6 @@ Console.WriteLine(answer.Text);
 ```bash
 dotnet add package DeepSeek.Core --version 1.1.0
 dotnet add package DeepSeek.Agents.AI --version 1.1.0
-dotnet add package DeepSeek.Decisions --version 1.1.0
 ```
 
 The core NuGet package is named `DeepSeek.Core`, while the public namespaces remain `DeepSeek` and `DeepSeek.*`.
@@ -401,10 +401,8 @@ Without this file, tests use `test-key` from `sample/appsettings.dev.json` and a
 
 - `src/DeepSeek.Core`: typed SDK
 - `src/DeepSeek.Agents.AI`: AI abstraction adapter
-- `src/DeepSeek.Decisions` provides Jev and Decisions APIs.
 - `test/DeepSeek.Tests`: unit tests for the typed SDK
 - `test/DeepSeek.Agents.AI.UnitTests`: unit tests for the adapter
-- `test/DeepSeek.Decisions.UnitTests` contains decision unit tests.
 - `test/DeepSeek.IntegrationTests`: live integration tests
 - `sample/`: example projects only
 
@@ -557,5 +555,5 @@ Notes:
 
 ## Notes
 
-- Tests cover Core, Agents, and Decisions.
+- Tests cover Core and Agents.
 - Projects under `sample/` are examples and are not covered by dedicated test projects.

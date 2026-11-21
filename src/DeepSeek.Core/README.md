@@ -96,7 +96,7 @@ For native multi-turn requests, keep the assistant's signed `server_tool_calls` 
 ### 1.0.6
 
 - Published version 1.0.6 with assembly version 1.0.6.0 alongside Agents and Decisions.
-- DeepSeek.Decisions builds on the public Chat client, image content, authentication, and HTTP pipeline. [Decisions package guide](https://github.com/yuezhishun/deepseek-sdk/tree/main/src/DeepSeek.Decisions)
+- DeepSeek.Decisions builds on the public Chat client, image content, authentication, and HTTP pipeline. [Decisions SDK](https://github.com/yuezhishun/decisions-sdk)
 
 ### 1.0.5
 

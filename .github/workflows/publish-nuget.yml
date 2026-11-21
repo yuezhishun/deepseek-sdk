@@ -34,7 +34,7 @@ jobs:
       - name: Validate release version
         shell: pwsh
         run: |
-          $projects = @("DeepSeek.Core", "DeepSeek.Agents.AI", "DeepSeek.Decisions")
+          $projects = @("DeepSeek.Core", "DeepSeek.Agents.AI")
           $centralVersions = ([xml](Get-Content -Raw Directory.Packages.props)).Project.ItemGroup.PackageVersion
           $version = ([xml](Get-Content -Raw src/DeepSeek.Core/DeepSeek.Core.csproj)).Project.PropertyGroup.Version
           if ($version -cnotmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') {
@@ -94,9 +94,6 @@ jobs:
       - name: Pack DeepSeek.Agents.AI
         run: dotnet pack src/DeepSeek.Agents.AI/DeepSeek.Agents.AI.csproj --configuration "$CONFIGURATION" --no-restore --output "$PACKAGE_OUTPUT" -p:ContinuousIntegrationBuild=true
 
-      - name: Pack DeepSeek.Decisions
-        run: dotnet pack src/DeepSeek.Decisions/DeepSeek.Decisions.csproj --configuration "$CONFIGURATION" --no-restore --output "$PACKAGE_OUTPUT" -p:ContinuousIntegrationBuild=true
-
       - name: List packages
         shell: pwsh
         run: Get-ChildItem $env:PACKAGE_OUTPUT | Select-Object Name,Length
@@ -105,7 +102,7 @@ jobs:
         shell: pwsh
         run: |
           $version = $env:PACKAGE_VERSION
-          foreach ($id in @("DeepSeek.Core", "DeepSeek.Agents.AI", "DeepSeek.Decisions")) {
+          foreach ($id in @("DeepSeek.Core", "DeepSeek.Agents.AI")) {
             $path = Join-Path $env:PACKAGE_OUTPUT "$id.$version.nupkg"
             $archive = [IO.Compression.ZipFile]::OpenRead($path)
             $assembly = New-TemporaryFile
@@ -178,18 +175,6 @@ jobs:
           NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
         run: |
           dotnet nuget push "$env:PACKAGE_OUTPUT/DeepSeek.Agents.AI.$env:PACKAGE_VERSION.nupkg" `
-            --api-key $env:NUGET_API_KEY `
-            --source https://api.nuget.org/v3/index.json `
-            --skip-duplicate `
-            --no-symbols
-
-      - name: Publish DeepSeek.Decisions
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-        shell: pwsh
-        env:
-          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
-        run: |
-          dotnet nuget push "$env:PACKAGE_OUTPUT/DeepSeek.Decisions.$env:PACKAGE_VERSION.nupkg" `
             --api-key $env:NUGET_API_KEY `
             --source https://api.nuget.org/v3/index.json `
             --skip-duplicate `

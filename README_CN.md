@@ -2,20 +2,21 @@
 
 当前 SDK 版本为 **1.1.0**。Microsoft Agent Framework 主包使用 **1.28.0**。
 
-`deepseek-sdk` 是一个适用于 DeepSeek 的 .NET SDK，包含三个主要库：
+`deepseek-sdk` 是一个适用于 DeepSeek 的 .NET SDK，包含两个主要库：
 
 - `src/DeepSeek.Core`：基于 `System.ClientModel` 与 HTTP pipeline 构建，可获得一致的请求处理模型、对日志、重试、诊断等横切能力更好的控制，也更适合构建可扩展的强类型 SDK 客户端
 - `src/DeepSeek.Agents.AI`：面向 Microsoft Agent Framework 的扩展与适配支持
-- `src/DeepSeek.Decisions`：独立的 Jev 与 Decisions 决策类库，依赖 Core，支持文本、JSON、图片及概率来源诊断；[用法与兼容边界](src/DeepSeek.Decisions/README.md)
 - 模型标识由调用方传入，应用可以跟随 DeepSeek 当前及未来的模型名称，而无需因模型名称变化升级 Core 包
 - 包含 DeepSeek 的两个 Beta 接口支持：对话前缀续写（chat prefix continuation）和 FIM 补全（FIM completion）
 - 按照 DeepSeek 官方思考模式文档实现了 thinking mode，包括推理开关、推理强度控制、`reasoning_content` 处理，以及多轮对话和工具调用下的续推理语义
+
+`DeepSeek.Decisions` 提供 Jev 与 Decisions 接口，开发和发布迁至独立仓库。[Decisions SDK](https://github.com/yuezhishun/decisions-sdk)
 
 ## 变更日志
 
 ### 1.1.0
 
-- 新增 Decisions 的 WorkflowEvals benchmark。[评测说明](benchmark/DeepSeek.Decisions.Benchmarks/README.md)
+- 新增 Decisions 的 WorkflowEvals benchmark。[评测说明](https://github.com/yuezhishun/decisions-sdk/tree/main/benchmark/DeepSeek.Decisions.Benchmarks)
 - Agent Framework 的 Azure Functions 和 DurableTask 集中版本更新为稳定版 `1.16.0`。
 - 源码已加入独立 OCR、ASR、HTTP 与 WebSocket TTS，以及两套 Files 的文档解析。
 - Chat、Responses 和 Messages 新增 Flash 联网搜索、深度搜索、链接读取、安全审核、标题和跨协议文档引用。Chat 与 Messages 支持 `latest_reminder`。
@@ -66,7 +67,6 @@
 ```bash
 dotnet add package DeepSeek.Core --version 1.1.0
 dotnet add package DeepSeek.Agents.AI --version 1.1.0
-dotnet add package DeepSeek.Decisions --version 1.1.0
 ```
 
 核心 NuGet 包名为 `DeepSeek.Core`，公共命名空间仍保持为 `DeepSeek` 与 `DeepSeek.*`。
@@ -99,9 +99,9 @@ var anthropicFiles = client.GetAnthropicFilesClient();
 
 ### .NET 11 与验收命令
 
-Core、Agents、Decisions 三个 NuGet 包继续使用 `netstandard2.0`。2026-11-11 已使用本机系统安装的 .NET 11 正式版完成兼容验证：SDK `11.0.100`、.NET / ASP.NET Core 运行时 `11.0.0`；Release 全解决方案构建零警告、零错误。Core 95、Agents 199、Decisions 59、在线集成 34，共 387 项通过，失败和跳过均为 0。历史发布说明中的 RC3 为当时的验证记录。
+Core 和 Agents 的 NuGet 包使用 `netstandard2.0`。1.0.8 于 2026-11-11 使用 .NET 11 正式版完成兼容验证，SDK 为 `11.0.100`，.NET / ASP.NET Core 运行时为 `11.0.0`。当时的 Release 全解决方案构建零警告、零错误，Core 95、Agents 199、Decisions 59、在线集成 34，共 387 项通过，失败和跳过均为 0。历史发布说明中的 RC3 为当时的验证记录。
 
-默认离线测试仍使用 .NET 8，集成测试使用 .NET 10。CI 安装正式版 SDK `11.0.100`，在默认测试之外增加完整的 .NET 11 测试与 TRX 输出；兼容性测试使用独立输出目录。安装 [.NET 11 正式版 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/11.0) 后，可通过现有可选属性运行同一组测试，三个 SDK 库的目标框架不变：
+默认离线测试仍使用 .NET 8，集成测试使用 .NET 10。CI 安装正式版 SDK `11.0.100`，在默认测试之外增加完整的 .NET 11 测试与 TRX 输出；兼容性测试使用独立输出目录。安装 [.NET 11 正式版 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/11.0) 后，可通过现有可选属性运行同一组测试：
 
 ```powershell
 dotnet --version # 本次验收：11.0.100
@@ -373,10 +373,8 @@ cp sample/appsettings.dev.json sample/appsettings.json
 
 - `src/DeepSeek.Core`：强类型 SDK
 - `src/DeepSeek.Agents.AI`：AI 抽象层适配器
-- `src/DeepSeek.Decisions`：Jev/Decisions 决策类库
 - `test/DeepSeek.Tests`：强类型 SDK 的单元测试
 - `test/DeepSeek.Agents.AI.UnitTests`：适配器的单元测试
-- `test/DeepSeek.Decisions.UnitTests`：决策类库的单元测试
 - `test/DeepSeek.IntegrationTests`：在线集成测试
 - `sample/`：仅示例项目
 
@@ -536,15 +534,15 @@ NuGet 策略应绑定以下值：
 - Repository Owner：`yuezhishun`。
 - Repository：`deepseek-sdk`。
 - Workflow：`publish-nuget.yml`，仅填写文件名。
-- 包范围：`DeepSeek.Core`、`DeepSeek.Agents.AI`、`DeepSeek.Decisions`。
+- 包范围：`DeepSeek.Core`、`DeepSeek.Agents.AI`。
 
 新策略可能显示 7 天临时激活窗口；窗口内首次成功发布后会永久激活。CI 每次发布自动取得短期密钥，无需手动复制密钥或定期更新仓库 Secret。
 
 发布 CI 必须另行配置仓库 Secret `DEEPSEEK_API_KEY`，仅在测试步骤映射为同名环境变量；`DEEPSEEK_REQUIRE_LIVE_TESTS=true` 确保缺少凭据时失败，在线测试不会被静默跳过。密钥不写入仓库或输出日志。
 
-手动运行 `publish-nuget.yml` 会执行完整测试、三个包的打包和文件校验，版本来自三个项目一致的 `Version`；NuGet 登录与上传仅在 `v*` tag push 时执行。这样可以验证 CI 修复，并保持已发布 tag 的提交不变。工作流使用 `actions/setup-dotnet@v6.1.0`，替换旧版的 Node `punycode` 弃用依赖链。
+手动运行 `publish-nuget.yml` 会执行完整测试、两个包的打包和文件校验，版本来自两个项目一致的 `Version`。NuGet 登录与上传仅在 `v*` tag push 时执行。这样可以验证 CI 修复，并保持已发布 tag 的提交不变。工作流使用 `actions/setup-dotnet@v6.1.0`，替换旧版的 Node `punycode` 弃用依赖链。
 
 ## 说明
 
-- 当前维护测试的范围包括 `src/DeepSeek.Core`、`src/DeepSeek.Agents.AI` 和 `src/DeepSeek.Decisions`
+- 当前维护测试的范围包括 `src/DeepSeek.Core` 和 `src/DeepSeek.Agents.AI`
 - `sample/` 下的项目仅用于示例演示，不包含专门的测试项目
